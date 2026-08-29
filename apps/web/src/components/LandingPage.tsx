@@ -20,18 +20,22 @@ import {
   Radio,
 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
+import { useAuth } from '../context/AuthContext';
 import { Hero3DCanvas } from './Hero3DCanvas';
 
 interface LandingPageProps {
   onEnterPortal: (role?: 'patient' | 'doctor' | 'reception' | 'analytics', initialToken?: string) => void;
   onOpenDemoControls: () => void;
+  onOpenAuthModal: (mode?: 'signin' | 'signup') => void;
 }
 
 export const LandingPage: React.FC<LandingPageProps> = ({
   onEnterPortal,
   onOpenDemoControls,
+  onOpenAuthModal,
 }) => {
   const { theme, toggleTheme } = useTheme();
+  const { user, isAuthenticated, signOut } = useAuth();
   const [tokenInput, setTokenInput] = useState('');
   const [activePreviewTab, setActivePreviewTab] = useState<'patient' | 'doctor' | 'reception'>('patient');
 
@@ -90,18 +94,47 @@ export const LandingPage: React.FC<LandingPageProps> = ({
 
             <button
               onClick={() => onEnterPortal('patient')}
-              className="px-3.5 py-1.5 rounded-lg text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 transition-all"
+              className="hidden sm:inline-flex px-3.5 py-1.5 rounded-lg text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 transition-all"
             >
               Patient Wait Tracker
             </button>
 
-            <button
-              onClick={() => onEnterPortal('doctor')}
-              className="px-4 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm transition-all flex items-center space-x-1.5"
-            >
-              <span>Staff Sign In</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </button>
+            {isAuthenticated && user ? (
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={() => onEnterPortal('doctor')}
+                  className="px-4 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm transition-all flex items-center space-x-2"
+                >
+                  {user.avatar_url && (
+                    <img src={user.avatar_url} alt={user.name} className="w-4 h-4 rounded-full object-cover" />
+                  )}
+                  <span>Open Workspace</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  onClick={signOut}
+                  className="hidden md:inline-flex px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-500 hover:text-rose-600 dark:text-slate-400 dark:hover:text-rose-400 transition-colors"
+                >
+                  Sign Out
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={() => onOpenAuthModal('signin')}
+                  className="px-3.5 py-1.5 rounded-lg text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 transition-all"
+                >
+                  Sign In
+                </button>
+                <button
+                  onClick={() => onOpenAuthModal('signup')}
+                  className="px-4 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm transition-all flex items-center space-x-1.5"
+                >
+                  <span>Sign Up</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </header>

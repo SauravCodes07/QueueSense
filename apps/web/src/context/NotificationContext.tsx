@@ -5,8 +5,10 @@ interface NotificationContextType {
   notifications: NotificationItem[];
   unreadCount: number;
   addNotification: (title: string, message: string, type?: 'info' | 'warning' | 'alert' | 'success') => void;
+  markAsRead: (id: string) => void;
   markAllAsRead: () => void;
   clearNotifications: () => void;
+  clearAll: () => void;
 }
 
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
@@ -21,6 +23,14 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       type: 'info',
       read: false,
     },
+    {
+      id: 'init-2',
+      title: 'Schedule Notice',
+      message: 'Cardiology (Room 301) running with slight schedule delay.',
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      type: 'alert',
+      read: false,
+    },
   ]);
 
   const addNotification = (title: string, message: string, type: 'info' | 'warning' | 'alert' | 'success' = 'info') => {
@@ -33,6 +43,10 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       read: false,
     };
     setNotifications((prev) => [item, ...prev.slice(0, 24)]);
+  };
+
+  const markAsRead = (id: string) => {
+    setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
   };
 
   const markAllAsRead = () => {
@@ -51,8 +65,10 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         notifications,
         unreadCount,
         addNotification,
+        markAsRead,
         markAllAsRead,
         clearNotifications,
+        clearAll: clearNotifications,
       }}
     >
       {children}

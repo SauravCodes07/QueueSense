@@ -4,14 +4,19 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { NotificationProvider, useNotifications } from './context/NotificationContext';
 import { LandingPage } from './components/LandingPage';
 import { AppShell } from './components/AppShell';
-import { OverviewDashboard } from './components/OverviewDashboard';
+import { AdminOverview } from './components/AdminOverview';
 import { PatientPortal } from './components/PatientPortal';
-import { DoctorDashboard } from './components/DoctorDashboard';
+import { DoctorConsole } from './components/DoctorConsole';
 import { ReceptionLiveBoard } from './components/ReceptionLiveBoard';
+import { PatientsPage } from './components/PatientsPage';
+import { DoctorsPage } from './components/DoctorsPage';
+import { NotificationsPage } from './components/NotificationsPage';
+import { SettingsPage } from './components/SettingsPage';
 import { AuditAndAnalytics } from './components/AuditAndAnalytics';
 import { NotificationCenter } from './components/NotificationCenter';
 import { DemoControlModal } from './components/DemoControlModal';
-import { SSEStreamManager, SSEConnectionStatus } from './services/sse';
+import { AuthModal } from './components/AuthModal';
+import { SSEStreamManager } from './services/sse';
 import { NavSection } from './types';
 
 const MainAppRouter: React.FC = () => {
@@ -19,9 +24,12 @@ const MainAppRouter: React.FC = () => {
   const [viewMode, setViewMode] = useState<'landing' | 'app'>('landing');
   const [activeSection, setActiveSection] = useState<NavSection>('overview');
   const [initialPatientToken, setInitialPatientToken] = useState<string | undefined>(undefined);
+  const [selectedDepartment, setSelectedDepartment] = useState<string>('General Medicine (GM)');
 
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const [isDemoModalOpen, setIsDemoModalOpen] = useState(false);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [authModalMode, setAuthModalMode] = useState<'signin' | 'signup' | 'forgot'>('signin');
   const [lastEventTime, setLastEventTime] = useState<number>(Date.now());
 
   const { activeDoctorId, patientToken, setPatientToken, loginAs } = useAuth();
@@ -82,7 +90,7 @@ const MainAppRouter: React.FC = () => {
       setActiveSection('patient_portal');
     } else if (role === 'doctor') {
       loginAs('sharma');
-      setActiveSection('doctors');
+      setActiveSection('doctor_console');
     } else if (role === 'reception') {
       loginAs('reception');
       setActiveSection('live_queues');
@@ -97,8 +105,29 @@ const MainAppRouter: React.FC = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  const handleOpenAuthModal = (mode: 'signin' | 'signup' = 'signin') => {
+    setAuthModalMode(mode);
+    setIsAuthModalOpen(true);
+  };
+
+  const handleAuthSuccess = () => {
+    setViewMode('app');
+    setActiveSection('overview');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   const handleTriggerStateMutated = () => {
     setLastEventTime(Date.now());
+  };
+
+  const handleResetDemoState = async () => {
+    try {
+      await fetch('http://localhost:8000/api/v1/demo/reset', { method: 'POST' });
+      setLastEventTime(Date.now());
+      addNotification('Demo State Reset', 'Initial clean database dataset reseeded successfully.', 'success');
+    } catch {
+      addNotification('Demo Reset Notice', 'Reset state refreshed locally.', 'info');
+    }
   };
 
   return (
@@ -107,6 +136,7 @@ const MainAppRouter: React.FC = () => {
         <LandingPage
           onEnterPortal={handleEnterPortalFromLanding}
           onOpenDemoControls={() => setIsDemoModalOpen(true)}
+          onOpenAuthModal={handleOpenAuthModal}
         />
       ) : (
         <AppShell
@@ -117,32 +147,39 @@ const MainAppRouter: React.FC = () => {
           onSwitchToPatientView={() => setActiveSection('patient_portal')}
           onExitToLanding={() => setViewMode('landing')}
         >
-          {/* Section 1: Overview Dashboard (Matching Reference Image) */}
-          {activeSection === 'overview' && (
-            <OverviewDashboard
+          {/* Section 1: Overview & Admin Overview (Screenshot 4) */}
+          {(activeSection === 'overview' || activeSection === 'admin_overview') && (
+            <AdminOverview
               onNavigate={setActiveSection}
-              onOpenWalkInModal={() => setActiveSection('patient_portal')}
-              onOpenTransferModal={() => setActiveSection('live_queues')}
+              onSelectDepartment={(dept) => {
+                setSelectedDepartment(dept);
+                setActiveSection('live_queues');
+              }}
               lastEventTime={lastEventTime}
             />
           )}
 
-          {/* Section 2: Live Queues & Transfers */}
-          {(activeSection === 'live_queues' || activeSection === 'transfers') && (
+          {/* Section 2: Live Queue Board */}
+          {activeSection === 'live_queues' && (
             <ReceptionLiveBoard lastEventTime={lastEventTime} />
           )}
 
-          {/* Section 3: Clinician Console & Workload */}
-          {(activeSection === 'doctors' || activeSection === 'workload' || activeSection === 'no_shows') && (
-            <DoctorDashboard lastEventTime={lastEventTime} />
+          {/* Section 3: Patients Roster & Walk-In Registration */}
+          {activeSection === 'patients' && (
+            <PatientsPage />
           )}
 
-          {/* Section 4: Audit Trail, Analytics & Alerts */}
-          {(activeSection === 'audit_trail' || activeSection === 'analytics' || activeSection === 'priority_alerts') && (
-            <AuditAndAnalytics lastEventTime={lastEventTime} />
+          {/* Section 4: Doctors Duty Roster */}
+          {activeSection === 'doctors' && (
+            <DoctorsPage />
           )}
 
-          {/* Section 5: Dedicated Patient Portal */}
+          {/* Section 5: Doctor Console (Live Room Workspace) */}
+          {activeSection === 'doctor_console' && (
+            <DoctorConsole lastEventTime={lastEventTime} />
+          )}
+
+          {/* Section 6: Patient Live Tracker Portal (Screenshot 3) */}
           {activeSection === 'patient_portal' && (
             <PatientPortal
               lastEventTime={lastEventTime}
@@ -150,27 +187,30 @@ const MainAppRouter: React.FC = () => {
             />
           )}
 
-          {/* Section 6: System Departments / Users / Settings Views */}
-          {(activeSection === 'departments' || activeSection === 'users' || activeSection === 'settings') && (
-            <div className="clinical-card p-8 text-center space-y-4">
-              <h3 className="text-xl font-display font-bold text-slate-900 dark:text-white capitalize">
-                {activeSection} Configuration
-              </h3>
-              <p className="text-xs text-slate-500 max-w-md mx-auto">
-                Hospital parameters, clinician speed calibration, and automated queue recalculation settings are active.
-              </p>
-              <div className="pt-4 flex justify-center space-x-3">
-                <button
-                  onClick={() => setActiveSection('overview')}
-                  className="px-4 py-2 rounded-xl bg-emerald-600 text-white text-xs font-semibold"
-                >
-                  Return to Overview Dashboard
-                </button>
-              </div>
-            </div>
+          {/* Section 7: Analytics & Audit Trail */}
+          {(activeSection === 'analytics' || activeSection === 'audit_trail' || activeSection === 'workload' || activeSection === 'transfers') && (
+            <AuditAndAnalytics lastEventTime={lastEventTime} />
+          )}
+
+          {/* Section 8: Operational Notifications Page */}
+          {activeSection === 'notifications' && (
+            <NotificationsPage />
+          )}
+
+          {/* Section 9: Settings Page (Screenshot 2) */}
+          {activeSection === 'settings' && (
+            <SettingsPage />
           )}
         </AppShell>
       )}
+
+      {/* Supabase Production Authentication Modal */}
+      <AuthModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
+        initialMode={authModalMode}
+        onSuccess={handleAuthSuccess}
+      />
 
       {/* Slide-out Notification Drawer */}
       <NotificationCenter

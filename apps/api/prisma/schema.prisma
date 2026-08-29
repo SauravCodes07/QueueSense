@@ -1,21 +1,24 @@
-// QueueSense — Prisma Schema (Local SQLite / Dev)
-// Production PostgreSQL schema available in schema.postgresql.prisma
+// QueueSense — Prisma Schema for Supabase PostgreSQL
+// Single Source of Truth for Database Schema
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = "file:./dev.db"
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 model User {
   id           Int       @id @default(autoincrement())
+  supabaseId   String?   @unique @map("supabase_id")
   email        String    @unique
-  passwordHash String    @map("password_hash")
+  passwordHash String?   @map("password_hash")
   name         String
   role         String    @default("RECEPTION")
+  avatarUrl    String?   @map("avatar_url")
   doctorId     Int?      @unique @map("doctor_id")
   doctor       Doctor?   @relation(fields: [doctorId], references: [id])
   createdAt    DateTime  @default(now()) @map("created_at")

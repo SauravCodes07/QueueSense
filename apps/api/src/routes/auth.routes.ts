@@ -32,6 +32,12 @@ export async function authRoutes(fastify: FastifyInstance) {
       });
     }
 
+    if (!user.passwordHash) {
+      return reply.status(401).send({
+        error: { code: 'OAUTH_USER', message: 'Please sign in with Supabase / Google OAuth' },
+      });
+    }
+
     const passwordValid = await bcrypt.compare(password, user.passwordHash);
     if (!passwordValid) {
       return reply.status(401).send({

@@ -10,6 +10,8 @@ export async function streamRoutes(fastify: FastifyInstance) {
       return reply.status(400).send({ error: { code: 'BAD_REQUEST', message: 'Invalid doctor ID' } });
     }
 
+    reply.hijack();
+
     reply.raw.writeHead(200, {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache',
@@ -18,8 +20,12 @@ export async function streamRoutes(fastify: FastifyInstance) {
     });
 
     // Send initial snapshot
-    const initialQueue = await getOrderedDoctorQueue(doctorId);
-    reply.raw.write(`event: queue_updated\ndata: ${JSON.stringify({ doctorId, reason: 'connected', queue: initialQueue })}\n\n`);
+    try {
+      const initialQueue = await getOrderedDoctorQueue(doctorId);
+      reply.raw.write(`event: queue_updated\ndata: ${JSON.stringify({ doctorId, reason: 'connected', queue: initialQueue })}\n\n`);
+    } catch {
+      reply.raw.write(`event: queue_updated\ndata: ${JSON.stringify({ doctorId, reason: 'connected', queue: [] })}\n\n`);
+    }
 
     const onQueueUpdate = async (event: QueueUpdatedEvent) => {
       try {
@@ -32,7 +38,11 @@ export async function streamRoutes(fastify: FastifyInstance) {
 
     // Heartbeat timer every 25s
     const heartbeat = setInterval(() => {
-      reply.raw.write(`event: heartbeat\ndata: ${JSON.stringify({ timestamp: new Date().toISOString() })}\n\n`);
+      try {
+        reply.raw.write(`event: heartbeat\ndata: ${JSON.stringify({ timestamp: new Date().toISOString() })}\n\n`);
+      } catch {
+        clearInterval(heartbeat);
+      }
     }, 25000);
 
     eventBus.on(`doctor:${doctorId}:queue_updated`, onQueueUpdate);
@@ -47,6 +57,8 @@ export async function streamRoutes(fastify: FastifyInstance) {
   fastify.get('/stream/patients/:token', async (request: FastifyRequest<{ Params: { token: string } }>, reply: FastifyReply) => {
     const { token } = request.params;
 
+    reply.hijack();
+
     reply.raw.writeHead(200, {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache',
@@ -57,11 +69,19 @@ export async function streamRoutes(fastify: FastifyInstance) {
     reply.raw.write(`event: heartbeat\ndata: ${JSON.stringify({ connected: true })}\n\n`);
 
     const onETAUpdate = (event: PatientETAUpdatedEvent) => {
-      reply.raw.write(`event: eta_updated\ndata: ${JSON.stringify(event)}\n\n`);
+      try {
+        reply.raw.write(`event: eta_updated\ndata: ${JSON.stringify(event)}\n\n`);
+      } catch (err) {
+        console.error('Error writing SSE patient update:', err);
+      }
     };
 
     const heartbeat = setInterval(() => {
-      reply.raw.write(`event: heartbeat\ndata: ${JSON.stringify({ timestamp: new Date().toISOString() })}\n\n`);
+      try {
+        reply.raw.write(`event: heartbeat\ndata: ${JSON.stringify({ timestamp: new Date().toISOString() })}\n\n`);
+      } catch {
+        clearInterval(heartbeat);
+      }
     }, 25000);
 
     eventBus.on(`patient:${token}:eta_updated`, onETAUpdate);

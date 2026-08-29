@@ -9,24 +9,29 @@ export type PriorityLevel = 'ROUTINE' | 'URGENT' | 'EMERGENCY';
 export type NavSection =
   | 'overview'
   | 'live_queues'
+  | 'patients'
   | 'doctors'
+  | 'analytics'
+  | 'notifications'
+  | 'settings'
+  | 'patient_portal'
+  | 'doctor_console'
+  | 'admin_overview'
   | 'workload'
   | 'transfers'
   | 'priority_alerts'
   | 'no_shows'
   | 'audit_trail'
-  | 'analytics'
   | 'departments'
-  | 'users'
-  | 'settings'
-  | 'patient_portal';
+  | 'users';
 
 export interface User {
-  id: number;
+  id: number | string;
   email: string;
   name: string;
   role: UserRole;
   doctor_id?: number;
+  avatar_url?: string;
 }
 
 export interface Department {

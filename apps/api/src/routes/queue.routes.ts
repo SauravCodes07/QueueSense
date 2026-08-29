@@ -26,6 +26,9 @@ const joinQueueSchema = z.object({
 const registerPatientSchema = z.object({
   name: z.string().min(1, 'Patient name is required'),
   contact: z.string().optional(),
+  doctor_id: z.number().int().positive().optional(),
+  department_id: z.number().int().positive().optional(),
+  priority: z.enum(['ROUTINE', 'URGENT', 'EMERGENCY']).default('ROUTINE'),
 });
 
 export async function queueRoutes(fastify: FastifyInstance) {
@@ -222,22 +225,74 @@ export async function queueRoutes(fastify: FastifyInstance) {
       });
     }
 
-    const { name, contact } = parseResult.data;
+    const { name, contact, doctor_id, department_id, priority } = parseResult.data;
     const count = await prisma.patient.count();
     const token = `P-${String(count + 1).padStart(3, '0')}`;
 
-    const newPatient = await prisma.patient.create({
-      data: {
-        token,
-        name,
-        phone: contact || null,
-      },
+    // Resolve target doctor
+    let targetDoctorId = doctor_id;
+    if (!targetDoctorId && department_id) {
+      const doc = await prisma.doctor.findFirst({
+        where: { departmentId: department_id, availabilityStatus: AvailabilityStatus.AVAILABLE },
+      }) || await prisma.doctor.findFirst({
+        where: { departmentId: department_id },
+      });
+      if (doc) targetDoctorId = doc.id;
+    }
+    if (!targetDoctorId) {
+      const firstDoc = await prisma.doctor.findFirst();
+      targetDoctorId = firstDoc ? firstDoc.id : 1;
+    }
+
+    const result = await prisma.$transaction(async (tx) => {
+      const newPatient = await tx.patient.create({
+        data: {
+          token,
+          name,
+          phone: contact || null,
+        },
+      });
+
+      const waitingCount = await tx.queueEntry.count({
+        where: { doctorId: targetDoctorId, status: QueueStatus.WAITING },
+      });
+
+      const newEntry = await tx.queueEntry.create({
+        data: {
+          patientId: newPatient.id,
+          doctorId: targetDoctorId,
+          priority: priority as PriorityTier,
+          status: QueueStatus.WAITING,
+          position: waitingCount + 1,
+        },
+      });
+
+      await logAuditEvent(
+        {
+          actorId: 1,
+          actorRole: 'RECEPTION',
+          action: 'PATIENT_ENROLLED',
+          targetId: newEntry.id,
+          reason: `Walk-in registration for ${name} (${token})`,
+          metadata: { patientToken: token, priority, doctorId: targetDoctorId },
+        },
+        tx
+      );
+
+      await recalculateQueueETAs(targetDoctorId, 'patient_registered', tx);
+
+      return {
+        patient: newPatient,
+        entry: newEntry,
+      };
     });
 
     return reply.status(201).send({
-      id: newPatient.id,
-      token: newPatient.token,
-      name: newPatient.name,
+      id: result.patient.id,
+      token: result.patient.token,
+      name: result.patient.name,
+      doctor_id: targetDoctorId,
+      queue_entry_id: result.entry.id,
     });
   };
   fastify.post('/patients', registerPatientHandler);
