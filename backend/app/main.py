@@ -97,6 +97,7 @@ async def generic_exception_handler(request: Request, exc: Exception):
 # ─── Health Check ─────────────────────────────────────────────────────────────
 
 @app.get("/health", tags=["Health"])
+@app.get("/api/v1/health", tags=["Health"])
 def health_check():
     """
     Health check endpoint.
@@ -105,7 +106,7 @@ def health_check():
     """
     db_ok = check_db_connection()
     return {
-        "status": "ok" if db_ok else "degraded",
+        "status": "healthy" if db_ok else "degraded",
         "db": "ok" if db_ok else "error",
         "version": "1.0.0",
         "environment": settings.ENVIRONMENT,

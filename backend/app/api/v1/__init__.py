@@ -12,6 +12,7 @@ from app.api.v1.endpoints import (
     audit,
     analytics,
     demo,
+    ml,
 )
 
 router = APIRouter()
@@ -35,7 +36,9 @@ router.include_router(stream.router, prefix="/stream", tags=["Real-time SSE"])
 
 # Admin operations
 router.include_router(audit.router, prefix="/audit-events", tags=["Audit"])
+router.include_router(audit.router, prefix="/audit", tags=["Audit"])
 router.include_router(analytics.router, prefix="/analytics", tags=["Analytics"])
+router.include_router(ml.router, prefix="/ml", tags=["Machine Learning"])
 
 # Demo mode operations
 router.include_router(demo.router, prefix="/demo", tags=["Demo"])

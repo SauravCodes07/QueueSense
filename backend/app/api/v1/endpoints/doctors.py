@@ -191,8 +191,8 @@ def _build_queue_snapshot(entries, etas: list[dict]) -> list[dict]:
         eta_low = eta.get("eta_low_seconds", 0)
         eta_high = eta.get("eta_high_seconds", 0)
         eta_clock = None
-        if eta_low is not None:
-            eta_clock = (datetime.now(timezone.utc) + timedelta(seconds=eta_low + eta_high) / 2).strftime("%I:%M %p")
+        if eta_low is not None and eta_high is not None:
+            eta_clock = (datetime.now(timezone.utc) + timedelta(seconds=(eta_low + eta_high) / 2)).strftime("%I:%M %p")
         
         snapshot.append({
             "id": entry.id,

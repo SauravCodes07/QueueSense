@@ -110,7 +110,7 @@ def get_doctor_queue(
             "joined_at": entry.joined_at.isoformat() if entry.joined_at else None,
         })
     
-    return {"doctor_id": doctor_id, "queue": result}
+    return result
 
 
 # ─── Join Queue ───────────────────────────────────────────────────────────────
@@ -201,6 +201,8 @@ def join_queue(body: JoinQueueRequest, db: Session = Depends(get_db)):
     entry_eta = next((e for e in etas if e["queue_entry_id"] == queue_entry.id), {})
     
     return {
+        "id": queue_entry.id,
+        "entry_id": queue_entry.id,
         "queue_entry_id": queue_entry.id,
         "token": patient.token,
         "doctor_id": body.doctor_id,
@@ -252,8 +254,13 @@ def cancel_queue_entry(
 # ─── Priority (Emergency / Urgent) ────────────────────────────────────────────
 
 class PriorityRequest(BaseModel):
-    level: PriorityLevel
+    level: Optional[PriorityLevel] = None
+    priority: Optional[PriorityLevel] = None
     reason: str
+
+    @property
+    def effective_priority(self) -> PriorityLevel:
+        return self.priority or self.level or PriorityLevel.ROUTINE
 
 
 @router.post("/{entry_id}/priority")
@@ -283,7 +290,8 @@ def set_priority(
             detail=f"Cannot set priority on entry with status {entry.status.value}",
         )
 
-    if body.level == PriorityLevel.ROUTINE:
+    target_priority = body.effective_priority
+    if target_priority == PriorityLevel.ROUTINE:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Cannot downgrade priority to ROUTINE via this endpoint",
@@ -301,14 +309,14 @@ def set_priority(
     
     try:
         old_priority = entry.priority_level
-        entry.priority_level = body.level
+        entry.priority_level = target_priority
         entry.updated_at = datetime.now(timezone.utc)
 
         # Create EmergencyEvent (immutable record)
         event = EmergencyEvent(
             queue_entry_id=entry_id,
             actor_id=current_user.id,
-            priority_level=body.level,
+            priority_level=target_priority,
             reason=body.reason,
             flagged_at=datetime.now(timezone.utc),
         )
@@ -323,7 +331,7 @@ def set_priority(
             entity_id=entry_id,
             metadata={
                 "old_priority": old_priority.value,
-                "new_priority": body.level.value,
+                "new_priority": target_priority.value,
                 "reason": body.reason,
                 "patient_token": entry.patient.token if entry.patient else None,
                 "actor_role": current_user.role.value,
@@ -331,7 +339,7 @@ def set_priority(
             actor_id=current_user.id,
         )
 
-        etas = update_cached_etas(doctor_id, db, reason=f"priority_{body.level.value.lower()}_flagged")
+        etas = update_cached_etas(doctor_id, db, reason=f"priority_{target_priority.value.lower()}_flagged")
         db.commit()
 
     except Exception as e:
@@ -342,9 +350,32 @@ def set_priority(
     broadcast_queue_update(doctor_id, f"emergency_flagged", snapshot)
     
     return {
-        "message": f"Priority set to {body.level.value}",
+        "message": f"Priority set to {target_priority.value}",
         "entry_id": entry_id,
-        "new_priority": body.level.value,
+        "new_priority": target_priority.value,
+    }
+
+
+# ─── Flag No-Show ─────────────────────────────────────────────────────────────
+
+@router.post("/{entry_id}/flag-no-show")
+def flag_no_show(
+    entry_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles(UserRole.DOCTOR, UserRole.RECEPTION, UserRole.ADMIN)),
+):
+    """Soft-flag a queue entry for potential no-show (grace period exceeded)."""
+    entry = db.query(QueueEntry).filter(QueueEntry.id == entry_id).first()
+    if not entry:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Queue entry not found")
+    
+    entry.no_show_flagged_at = datetime.now(timezone.utc)
+    entry.updated_at = datetime.now(timezone.utc)
+    db.commit()
+    return {
+        "message": "Queue entry soft-flagged for no-show",
+        "entry_id": entry_id,
+        "flagged_at": entry.no_show_flagged_at.isoformat(),
     }
 
 

@@ -40,13 +40,13 @@ def utcnow():
 
 def run_seed(db: Session):
     """Run the seed data insertion. Clears existing demo data first."""
-    print("🌱 Seeding database...")
+    print("[SEED] Seeding database...")
     _clear_queue_data(db)
     _seed_departments(db)
     _seed_users_and_doctors(db)
     _seed_historical_sessions(db)
     _seed_patients_and_queue(db)
-    print("✅ Seed complete")
+    print("[SEED] Seed complete")
 
 
 def _clear_queue_data(db: Session):

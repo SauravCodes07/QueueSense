@@ -12,6 +12,7 @@ After every completion:
 """
 import math
 from datetime import datetime, timezone
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
@@ -149,23 +150,12 @@ def start_consultation(
     }
 
 
-@router.post("/{session_id}/complete")
-def complete_consultation(
-    session_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.DOCTOR)),
-):
-    """
-    Complete a consultation.
-    DOCTOR role only — doctors can only complete their own consultations.
-    
-    Records server-side ended_at, computes duration_seconds,
-    updates the doctor's EMA cache, recalculates all downstream ETAs.
-    """
-    session = db.query(ConsultationSession).filter(ConsultationSession.id == session_id).first()
-    if not session:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Consultation session not found")
+class CompleteConsultationBody(BaseModel):
+    session_id: Optional[int] = None
+    queue_entry_id: Optional[int] = None
 
+
+def _execute_complete_session(session: ConsultationSession, db: Session, current_user: User) -> dict:
     if session.ended_at is not None:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -176,12 +166,13 @@ def complete_consultation(
     if not entry:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Associated queue entry not found")
 
-    # RBAC: Doctor can only complete their own consultations
-    if not current_user.doctor or current_user.doctor.id != session.doctor_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You can only complete your own consultations",
-        )
+    # RBAC: Doctor can only complete their own consultations (unless admin manual complete)
+    if current_user.role == UserRole.DOCTOR:
+        if not current_user.doctor or current_user.doctor.id != session.doctor_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You can only complete your own consultations",
+            )
 
     doctor_id = session.doctor_id
     now = datetime.now(timezone.utc)
@@ -190,13 +181,7 @@ def complete_consultation(
     started_at = session.started_at
     if started_at.tzinfo is None:
         started_at = started_at.replace(tzinfo=timezone.utc)
-    duration_seconds = (now - started_at).total_seconds()
-
-    if duration_seconds < 0:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid duration: ended_at is before started_at",
-        )
+    duration_seconds = max(1.0, (now - started_at).total_seconds())
 
     try:
         # Update session
@@ -248,8 +233,45 @@ def complete_consultation(
         "session_id": session.id,
         "duration_seconds": round(duration_seconds, 2),
         "duration_minutes": round(duration_seconds / 60, 1),
+        "doctor_ema_seconds": round(doctor.ema_duration_seconds, 1) if doctor and doctor.ema_duration_seconds else None,
         "ended_at": now.isoformat(),
     }
+
+
+@router.post("/complete")
+def complete_consultation_by_body(
+    body: CompleteConsultationBody,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles(UserRole.DOCTOR)),
+):
+    """Complete a consultation using session_id or queue_entry_id in body."""
+    session = None
+    if body.session_id:
+        session = db.query(ConsultationSession).filter(ConsultationSession.id == body.session_id).first()
+    elif body.queue_entry_id:
+        session = db.query(ConsultationSession).filter(ConsultationSession.queue_entry_id == body.queue_entry_id).first()
+    
+    if not session:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Consultation session not found")
+    
+    return _execute_complete_session(session, db, current_user)
+
+
+@router.post("/{session_id}/complete")
+def complete_consultation(
+    session_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles(UserRole.DOCTOR)),
+):
+    """
+    Complete a consultation by path session_id.
+    DOCTOR role only — doctors can only complete their own consultations.
+    """
+    session = db.query(ConsultationSession).filter(ConsultationSession.id == session_id).first()
+    if not session:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Consultation session not found")
+
+    return _execute_complete_session(session, db, current_user)
 
 
 @router.post("/{session_id}/manual-complete")
