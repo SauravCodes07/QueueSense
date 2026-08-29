@@ -6,10 +6,13 @@ import { NavSection } from '../types';
 interface AppShellProps {
   activeSection: NavSection;
   onSelectSection: (section: NavSection) => void;
-  onOpenNotifications: () => void;
-  onOpenDemoControls: () => void;
-  onSwitchToPatientView: () => void;
-  onExitToLanding: () => void;
+  onOpenNotifications?: () => void;
+  onOpenDemoControls?: () => void;
+  onSwitchToPatientView?: () => void;
+  onExitToLanding?: () => void;
+  selectedDepartment?: string;
+  onSelectDepartment?: (dept: string) => void;
+  onResetDemo?: () => void;
   children: React.ReactNode;
 }
 
@@ -19,6 +22,10 @@ export const AppShell: React.FC<AppShellProps> = ({
   onOpenNotifications,
   onOpenDemoControls,
   onSwitchToPatientView,
+  onExitToLanding,
+  selectedDepartment,
+  onSelectDepartment,
+  onResetDemo,
   children,
 }) => {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
@@ -31,8 +38,9 @@ export const AppShell: React.FC<AppShellProps> = ({
         <Sidebar
           activeSection={activeSection}
           onSelectSection={onSelectSection}
-          onOpenDemoControls={onOpenDemoControls}
-          onSwitchToPatientView={onSwitchToPatientView}
+          onOpenDemoControls={onOpenDemoControls || (() => {})}
+          onSwitchToPatientView={onSwitchToPatientView || (() => {})}
+          onResetDemo={onResetDemo}
           isCollapsed={isSidebarCollapsed}
           onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
         />
@@ -55,13 +63,14 @@ export const AppShell: React.FC<AppShellProps> = ({
                 setIsMobileNavOpen(false);
               }}
               onOpenDemoControls={() => {
-                onOpenDemoControls();
+                onOpenDemoControls?.();
                 setIsMobileNavOpen(false);
               }}
               onSwitchToPatientView={() => {
-                onSwitchToPatientView();
+                onSwitchToPatientView?.();
                 setIsMobileNavOpen(false);
               }}
+              onResetDemo={onResetDemo}
             />
           </div>
         </div>
@@ -72,8 +81,8 @@ export const AppShell: React.FC<AppShellProps> = ({
         {/* Top Header */}
         <TopHeader
           activeSection={activeSection}
-          onOpenNotifications={onOpenNotifications}
-          onOpenDemoControls={onOpenDemoControls}
+          onOpenNotifications={onOpenNotifications || (() => {})}
+          onOpenDemoControls={onOpenDemoControls || (() => {})}
           onToggleMobileNav={() => setIsMobileNavOpen(!isMobileNavOpen)}
         />
 
