@@ -44,8 +44,8 @@ export async function auditRoutes(fastify: FastifyInstance) {
       doctor_id: doc.id,
       doctor_name: doc.name,
       department_name: doc.department.name,
-      avg_consultation_duration_minutes: Number(((doc.emaConsultationSeconds || 720) / 60).toFixed(1)),
-      ema_duration_seconds: doc.emaConsultationSeconds,
+      avg_consultation_duration_minutes: Number((doc.emaMinutes || 12).toFixed(1)),
+      ema_duration_seconds: Math.round((doc.emaMinutes || 12) * 60),
       no_show_rate: 3.5,
       total_completed: 12,
     }));

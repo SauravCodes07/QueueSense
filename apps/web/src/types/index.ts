@@ -6,6 +6,21 @@ export type QueueStatus = 'WAITING' | 'IN_PROGRESS' | 'COMPLETED' | 'NO_SHOW' | 
 
 export type PriorityLevel = 'ROUTINE' | 'URGENT' | 'EMERGENCY';
 
+export type NavSection =
+  | 'overview'
+  | 'live_queues'
+  | 'doctors'
+  | 'workload'
+  | 'transfers'
+  | 'priority_alerts'
+  | 'no_shows'
+  | 'audit_trail'
+  | 'analytics'
+  | 'departments'
+  | 'users'
+  | 'settings'
+  | 'patient_portal';
+
 export interface User {
   id: number;
   email: string;
@@ -17,6 +32,7 @@ export interface User {
 export interface Department {
   id: number;
   name: string;
+  defaultConsultationMinutes?: number;
 }
 
 export interface Doctor {
@@ -97,4 +113,33 @@ export interface NotificationItem {
   timestamp: string;
   type: 'info' | 'warning' | 'alert' | 'success';
   read: boolean;
+}
+
+export interface DashboardKPIData {
+  totalPatientsToday: number;
+  patientsChangePct: number;
+  averageWaitMinutes: number;
+  waitChangeMinutes: number;
+  inConsultationCount: number;
+  noShowsToday: number;
+  emergenciesToday: number;
+}
+
+export interface DepartmentQueueSnapshot {
+  id: number;
+  name: string;
+  code: string;
+  nowServing: string;
+  inQueueCount: number;
+  avgWaitMinutes: number;
+  longestWaitMinutes: number;
+  status: 'Normal' | 'Moderate' | 'Busy' | 'High Load';
+  etaRange: string;
+  activeDoctorName: string;
+}
+
+export interface RadarWorkloadData {
+  department: string;
+  currentLoad: number;
+  optimalLoad: number;
 }

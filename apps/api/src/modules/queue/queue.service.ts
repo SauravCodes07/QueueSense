@@ -41,7 +41,7 @@ export async function getOrderedDoctorQueue(doctorId: number, tx?: Prisma.Transa
     if (b.status === QueueStatus.IN_PROGRESS && a.status !== QueueStatus.IN_PROGRESS) return 1;
 
     // 2. Priority tier (EMERGENCY=1, URGENT=2, ROUTINE=3)
-    const rankDiff = PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority];
+    const rankDiff = PRIORITY_RANK[a.priority as PriorityTier] - PRIORITY_RANK[b.priority as PriorityTier];
     if (rankDiff !== 0) return rankDiff;
 
     // 3. FIFO

@@ -12,7 +12,8 @@ export interface SSEClientOptions {
   onETAUpdate?: (data: any) => void;
 }
 
-const STREAM_BASE = 'http://localhost:8000/api/v1/stream';
+const BASE_URL = (import.meta.env.VITE_API_URL || 'http://localhost:8000').replace(/\/$/, '');
+const STREAM_BASE = `${BASE_URL}/api/v1/stream`;
 
 export class SSEStreamManager {
   private urlPath: string;

@@ -4,10 +4,10 @@ import { startConsultation, endConsultation } from '../modules/consultation/cons
 
 export async function consultationRoutes(fastify: FastifyInstance) {
   // POST /consultations/:queueEntryId/start — Start consultation
-  fastify.post(
+  fastify.post<{ Params: { queueEntryId: string } }>(
     '/consultations/:queueEntryId/start',
     { preHandler: [requireDoctorOrStaff()] },
-    async (request: FastifyRequest<{ Params: { queueEntryId: string } }>, reply: FastifyReply) => {
+    async (request, reply) => {
       const queueEntryId = parseInt(request.params.queueEntryId, 10);
       if (isNaN(queueEntryId)) {
         return reply.status(400).send({ error: { code: 'BAD_REQUEST', message: 'Invalid queueEntryId' } });
@@ -26,10 +26,10 @@ export async function consultationRoutes(fastify: FastifyInstance) {
   );
 
   // POST /consultations/:queueEntryId/end — End consultation
-  fastify.post(
+  fastify.post<{ Params: { queueEntryId: string } }>(
     '/consultations/:queueEntryId/end',
     { preHandler: [requireDoctorOrStaff()] },
-    async (request: FastifyRequest<{ Params: { queueEntryId: string } }>, reply: FastifyReply) => {
+    async (request, reply) => {
       const queueEntryId = parseInt(request.params.queueEntryId, 10);
       if (isNaN(queueEntryId)) {
         return reply.status(400).send({ error: { code: 'BAD_REQUEST', message: 'Invalid queueEntryId' } });

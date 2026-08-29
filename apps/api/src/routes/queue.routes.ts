@@ -139,7 +139,7 @@ export async function queueRoutes(fastify: FastifyInstance) {
       department_id: d.departmentId,
       department_name: d.department.name,
       availability_status: d.availabilityStatus,
-      ema_duration_seconds: d.emaConsultationSeconds,
+      ema_duration_seconds: Math.round((d.emaMinutes || 12) * 60),
     }));
 
     return reply.send(mapped);
@@ -163,7 +163,7 @@ export async function queueRoutes(fastify: FastifyInstance) {
       department_id: doc.departmentId,
       department_name: doc.department.name,
       availability_status: doc.availabilityStatus,
-      ema_duration_seconds: doc.emaConsultationSeconds,
+      ema_duration_seconds: Math.round((doc.emaMinutes || 12) * 60),
     });
   });
 
@@ -230,7 +230,7 @@ export async function queueRoutes(fastify: FastifyInstance) {
       data: {
         token,
         name,
-        contactNumber: contact || null,
+        phone: contact || null,
       },
     });
 

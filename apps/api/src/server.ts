@@ -16,9 +16,15 @@ export function buildServer() {
     logger: config.NODE_ENV === 'development' ? { level: 'info' } : false,
   });
 
-  // CORS
+  // CORS configuration supporting dynamic Vercel origin and local dev
+  const rawOrigins = config.CORS_ORIGIN || config.CORS_ORIGINS;
+  const allowedOrigins = rawOrigins
+    .split(',')
+    .map((o) => o.trim())
+    .filter(Boolean);
+
   fastify.register(cors, {
-    origin: config.CORS_ORIGINS.split(','),
+    origin: allowedOrigins.includes('*') ? true : allowedOrigins,
     credentials: true,
   });
 

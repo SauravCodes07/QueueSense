@@ -3,6 +3,7 @@ import { z } from 'zod';
 import bcrypt from 'bcryptjs';
 import { prisma } from '../db/client.js';
 import { generateToken, generatePatientToken } from '../middleware/rbac.js';
+import { UserRole } from '../types/index.js';
 
 const loginSchema = z.object({
   email: z.string().email(),
@@ -42,7 +43,7 @@ export async function authRoutes(fastify: FastifyInstance) {
       userId: user.id,
       email: user.email,
       name: user.name,
-      role: user.role,
+      role: user.role as UserRole,
       doctorId: user.doctorId,
     });
 

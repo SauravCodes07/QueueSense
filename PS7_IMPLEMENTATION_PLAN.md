@@ -78,4 +78,8 @@ Per `development.md`, the authoritative stack is:
 | 2026-08-29 | 6 | Frontend Surfaces & Monorepo | Configured `apps/web` with React 19, Tailwind CSS, TanStack Query, Recharts, and verified production build |
 | 2026-08-29 | 7 | Hardening & Test Verification | 25/25 unit & integration tests passing in Vitest, docker-compose.yml, CI workflow |
 | 2026-08-29 | 8 | Complete Fluid Responsiveness Pass | Full dynamic adaptation across all viewports (mobile, tablet, desktop, landscape), stable SSE keying, scrollable modals, touch targets >=44px, zero layout shift |
+| 2026-08-29 | 9 | Enterprise Information Architecture & Visual Hierarchy | Dedicated Public Landing Page, Context-Aware Collapsible Left Sidebar Application Shell, decoupled Incident Simulation Sandbox, refined clinical design system |
+| 2026-08-29 | 10 | Enterprise Healthcare SaaS Redesign (Reference Match) | Complete operational command center, 5 KPI cards, Smart Queue Engine hero banner, department queues snapshot, wait-time AreaChart & priority Donut charts, live activity feed, workload RadarChart, and quick actions |
+| 2026-08-29 | 11 | Canonical Deployment Structure Consolidation | Consolidated to single canonical frontend (`apps/web` → Vercel) and backend (`apps/api` → Render), removed legacy duplicate folders, added Dockerfile and vercel.json |
+
 
