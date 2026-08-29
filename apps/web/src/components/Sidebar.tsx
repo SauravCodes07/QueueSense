@@ -17,6 +17,8 @@ import {
 } from 'lucide-react';
 import { NavSection } from '../types';
 import { useAuth } from '../context/AuthContext';
+import { useQueue } from '../context/QueueContext';
+import { useNotifications } from '../context/NotificationContext';
 
 interface SidebarProps {
   activeSection: NavSection;
@@ -35,20 +37,22 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onSelectSection,
   onOpenDemoControls,
   isCollapsed = false,
-  waitingCount = 13,
-  unreadNotificationCount = 2,
   onResetDemo,
 }) => {
   const { user, signOut } = useAuth();
+  const { patients } = useQueue();
+  const { unreadCount } = useNotifications();
   const [isResetting, setIsResetting] = useState(false);
+
+  const totalWaiting = patients.filter((p) => p.status === 'WAITING').length;
 
   const operationsItems: { id: NavSection; label: string; icon: React.ComponentType<any>; badge?: number; badgeColor?: string }[] = [
     { id: 'overview', label: 'Overview', icon: LayoutGrid },
-    { id: 'live_queues', label: 'Live Queue', icon: Users, badge: waitingCount },
+    { id: 'live_queues', label: 'Live Queue', icon: Users, badge: totalWaiting },
     { id: 'patients', label: 'Patients', icon: User },
     { id: 'doctors', label: 'Doctors', icon: Stethoscope },
     { id: 'analytics', label: 'Analytics', icon: BarChart3 },
-    { id: 'notifications', label: 'Notifications', icon: Bell, badge: unreadNotificationCount, badgeColor: 'bg-rose-500 text-white' },
+    { id: 'notifications', label: 'Notifications', icon: Bell, badge: unreadCount, badgeColor: 'bg-rose-500 text-white' },
     { id: 'settings', label: 'Settings', icon: Settings },
   ];
 

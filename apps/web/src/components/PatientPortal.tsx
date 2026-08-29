@@ -13,20 +13,7 @@ import {
   Info,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-
-interface PatientOption {
-  token: string;
-  name: string;
-  department: string;
-  position: number;
-  checkInTime: string;
-  waitMinutes: number;
-  doctorName: string;
-  doctorTitle: string;
-  room: string;
-  expectedTime: string;
-  step: number; // 1 to 5
-}
+import { useQueue } from '../context/QueueContext';
 
 interface PatientPortalProps {
   lastEventTime?: number;
@@ -34,80 +21,34 @@ interface PatientPortalProps {
 }
 
 export const PatientPortal: React.FC<PatientPortalProps> = ({
-  lastEventTime,
   initialToken = 'GM-104',
 }) => {
   const { patientToken, setPatientToken } = useAuth();
+  const { patients } = useQueue();
 
-  const patientsList: PatientOption[] = [
-    {
-      token: 'GM-104',
-      name: 'Sneha Patil',
-      department: 'General Medicine',
-      position: 4,
-      checkInTime: '09:54',
-      waitMinutes: 36,
-      doctorName: 'Dr. Anjali Sharma',
-      doctorTitle: 'Senior Consultant Physician',
-      room: 'Room 101',
-      expectedTime: '10:52 AM',
-      step: 3,
-    },
-    {
-      token: 'PD-202',
-      name: 'Aarav Verma',
-      department: 'Pediatrics',
-      position: 2,
-      checkInTime: '10:05',
-      waitMinutes: 14,
-      doctorName: 'Dr. Anita Patel',
-      doctorTitle: 'Pediatric Specialist',
-      room: 'Room 201',
-      expectedTime: '10:30 AM',
-      step: 3,
-    },
-    {
-      token: 'CD-301',
-      name: 'Rohan Gupta',
-      department: 'Cardiology',
-      position: 1,
-      checkInTime: '09:30',
-      waitMinutes: 5,
-      doctorName: 'Dr. Raj Mehta',
-      doctorTitle: 'Senior Cardiologist',
-      room: 'Room 301',
-      expectedTime: '10:20 AM',
-      step: 4,
-    },
-    {
-      token: 'GM-101',
-      name: 'Pooja Iyer',
-      department: 'General Medicine',
-      position: 0,
-      checkInTime: '09:15',
-      waitMinutes: 0,
-      doctorName: 'Dr. Anjali Sharma',
-      doctorTitle: 'Senior Consultant Physician',
-      room: 'Room 101',
-      expectedTime: '10:15 AM',
-      step: 5,
-    },
-  ];
-
-  const [selectedToken, setSelectedToken] = useState<string>(initialToken || patientToken || 'GM-104');
+  const [selectedToken, setSelectedToken] = useState<string>(
+    initialToken || patientToken || (patients[0] ? patients[0].token : 'GM-104')
+  );
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
   useEffect(() => {
     if (initialToken) setSelectedToken(initialToken);
   }, [initialToken]);
 
-  const activePatient = patientsList.find((p) => p.token === selectedToken) || patientsList[0];
+  const activePatient = patients.find((p) => p.token.toLowerCase() === selectedToken.toLowerCase()) || patients[0];
 
   const handleSelectPatient = (token: string) => {
     setSelectedToken(token);
     setPatientToken(token);
     setIsDropdownOpen(false);
   };
+
+  // Determine current step (1 to 5)
+  const currentStep =
+    !activePatient ? 1 :
+    activePatient.status === 'COMPLETED' ? 5 :
+    activePatient.status === 'IN_PROGRESS' ? 4 :
+    activePatient.status === 'WAITING' ? 3 : 2;
 
   const steps = [
     { num: 1, title: 'Checked In', sub: 'Arrival confirmed' },
@@ -117,9 +58,19 @@ export const PatientPortal: React.FC<PatientPortalProps> = ({
     { num: 5, title: 'Completed', sub: 'Prescription ready' },
   ];
 
+  if (!activePatient) {
+    return (
+      <div className="max-w-3xl mx-auto p-8 text-center bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800">
+        <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+          No active patient ticket selected.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-3xl mx-auto space-y-4 animate-in fade-in duration-150">
-      {/* ── Top Bar Header (Screenshot 3) ───────────────────────────── */}
+      {/* ── Top Bar Header ───────────────────────────────────────────── */}
       <div className="p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3 shadow-subtle">
         <div className="flex items-center space-x-2 text-xs font-semibold text-slate-700 dark:text-slate-200">
           <Smartphone className="w-4 h-4 text-teal-600 dark:text-teal-400" />
@@ -127,7 +78,7 @@ export const PatientPortal: React.FC<PatientPortalProps> = ({
           <span className="text-slate-400 font-normal">• Mobile Self-Service</span>
         </div>
 
-        {/* Switch View Dropdown (Screenshot 3) */}
+        {/* Switch View Dropdown */}
         <div className="relative">
           <div className="flex items-center space-x-2 text-xs">
             <span className="text-slate-400 font-medium text-[11px]">Switch View:</span>
@@ -136,20 +87,20 @@ export const PatientPortal: React.FC<PatientPortalProps> = ({
               className="flex items-center space-x-2 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200/70 dark:hover:bg-slate-750 font-bold text-slate-800 dark:text-slate-200 transition-colors border border-slate-200/80 dark:border-slate-700"
             >
               <span className="truncate max-w-[240px]">
-                {activePatient.token} — {activePatient.name} ({activePatient.department} • #{activePatient.position})
+                {activePatient.token} — {activePatient.name} ({activePatient.department} • #{activePatient.position > 0 ? activePatient.position : 'In Room'})
               </span>
               <ChevronDown className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
             </button>
           </div>
 
           {isDropdownOpen && (
-            <div className="absolute right-0 mt-2 w-72 p-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl z-50 text-xs space-y-1 animate-in fade-in">
+            <div className="absolute right-0 mt-2 w-72 p-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl z-50 text-xs space-y-1 animate-in fade-in max-h-60 overflow-y-auto">
               <div className="px-3 py-1 text-[10px] uppercase font-bold text-slate-400">
                 Select Active Patient Ticket
               </div>
-              {patientsList.map((p) => (
+              {patients.map((p) => (
                 <button
-                  key={p.token}
+                  key={p.id}
                   onClick={() => handleSelectPatient(p.token)}
                   className={`w-full text-left px-3 py-2 rounded-xl transition-colors ${
                     p.token === activePatient.token
@@ -161,7 +112,7 @@ export const PatientPortal: React.FC<PatientPortalProps> = ({
                     {p.token} — {p.name}
                   </p>
                   <p className="text-[10px] text-slate-400">
-                    {p.department} • Queue #{p.position} ({p.waitMinutes} min)
+                    {p.department} • {p.status === 'IN_PROGRESS' ? 'In Consultation' : p.status === 'COMPLETED' ? 'Completed' : `Queue #${p.position}`}
                   </p>
                 </button>
               ))}
@@ -170,7 +121,7 @@ export const PatientPortal: React.FC<PatientPortalProps> = ({
         </div>
       </div>
 
-      {/* ── Main Patient Status Card (Screenshot 3) ─────────────────── */}
+      {/* ── Main Patient Status Card ─────────────────────────────────── */}
       <div className="clinical-card overflow-hidden bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 shadow-md">
         {/* Dark Navy Header Card */}
         <div className="bg-[#0f172a] text-white p-6 sm:p-7 space-y-3">
@@ -203,7 +154,7 @@ export const PatientPortal: React.FC<PatientPortalProps> = ({
 
         {/* Inner Card Content */}
         <div className="p-6 sm:p-7 space-y-6">
-          {/* 3 Big Metric Pills (Screenshot 3) */}
+          {/* 3 Big Metric Pills */}
           <div className="grid grid-cols-3 gap-3 sm:gap-4">
             {/* Token */}
             <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-750 text-center space-y-1">
@@ -221,7 +172,7 @@ export const PatientPortal: React.FC<PatientPortalProps> = ({
                 QUEUE POSITION
               </span>
               <div className="text-xl sm:text-2xl font-display font-bold text-teal-600 dark:text-teal-300">
-                #{activePatient.position}
+                {activePatient.status === 'IN_PROGRESS' ? 'IN ROOM' : activePatient.status === 'COMPLETED' ? 'DONE' : `#${activePatient.position}`}
               </div>
             </div>
 
@@ -231,7 +182,7 @@ export const PatientPortal: React.FC<PatientPortalProps> = ({
                 ESTIMATED WAIT
               </span>
               <div className="text-xl sm:text-2xl font-display font-bold text-slate-900 dark:text-white">
-                {activePatient.waitMinutes} <span className="text-sm font-normal text-slate-400">min</span>
+                {activePatient.status === 'IN_PROGRESS' ? '0' : activePatient.etaMinutes} <span className="text-sm font-normal text-slate-400">min</span>
               </div>
             </div>
           </div>
@@ -251,7 +202,7 @@ export const PatientPortal: React.FC<PatientPortalProps> = ({
                   {activePatient.doctorName}
                 </p>
                 <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
-                  {activePatient.doctorTitle} • {activePatient.room}
+                  {activePatient.department} • {activePatient.doctorRoom}
                 </p>
               </div>
             </div>
@@ -269,22 +220,22 @@ export const PatientPortal: React.FC<PatientPortalProps> = ({
                   {activePatient.expectedTime}
                 </p>
                 <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium truncate">
-                  Status: On schedule
+                  Status: {activePatient.status === 'IN_PROGRESS' ? 'In Progress' : activePatient.status === 'COMPLETED' ? 'Completed' : 'On schedule'}
                 </p>
               </div>
             </div>
           </div>
 
-          {/* ── CONSULTATION JOURNEY 5-Step Stepper (Screenshot 3) ── */}
+          {/* ── CONSULTATION JOURNEY 5-Step Stepper ── */}
           <div className="p-5 rounded-2xl bg-slate-50/80 dark:bg-slate-850 border border-slate-200/80 dark:border-slate-750 space-y-4">
             <span className="text-[11px] font-bold text-slate-900 dark:text-slate-200 uppercase tracking-wider block">
               CONSULTATION JOURNEY
             </span>
 
             <div className="grid grid-cols-5 gap-2 relative">
-              {steps.map((s, idx) => {
-                const isCompleted = s.num < activePatient.step;
-                const isCurrent = s.num === activePatient.step;
+              {steps.map((s) => {
+                const isCompleted = s.num < currentStep;
+                const isCurrent = s.num === currentStep;
                 return (
                   <div key={s.num} className="flex flex-col items-center text-center relative z-10">
                     <div
@@ -322,7 +273,7 @@ export const PatientPortal: React.FC<PatientPortalProps> = ({
             </div>
           </div>
 
-          {/* Footer Informational Disclaimer (Screenshot 3) */}
+          {/* Footer Informational Disclaimer */}
           <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-800 text-[11px] text-slate-500 dark:text-slate-400 flex items-start space-x-2">
             <Info className="w-4 h-4 text-slate-400 flex-shrink-0 mt-0.5" />
             <span>

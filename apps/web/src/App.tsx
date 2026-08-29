@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { ThemeProvider } from './context/ThemeContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { NotificationProvider, useNotifications } from './context/NotificationContext';
+import { QueueProvider } from './context/QueueContext';
 import { LandingPage } from './components/LandingPage';
 import { AppShell } from './components/AppShell';
 import { AdminOverview } from './components/AdminOverview';
@@ -234,7 +235,9 @@ export default function App() {
     <ThemeProvider>
       <AuthProvider>
         <NotificationProvider>
-          <MainAppRouter />
+          <QueueProvider>
+            <MainAppRouter />
+          </QueueProvider>
         </NotificationProvider>
       </AuthProvider>
     </ThemeProvider>
