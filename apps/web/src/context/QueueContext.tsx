@@ -96,6 +96,7 @@ export const QueueProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [patients, setPatients] = useState<AppPatient[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const isFetchingRef = useRef(false);
+  const channelRef = useRef<any>(null);
 
   // Helper to re-calculate queue ordering and ETAs deterministically: EMERGENCY -> URGENT -> ROUTINE
   const recalculateAllQueues = useCallback((currentPatients: AppPatient[], currentDoctors: DoctorMeta[]): AppPatient[] => {
@@ -277,12 +278,15 @@ export const QueueProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   }, [recalculateAllQueues]);
 
-  // Realtime Supabase Channel Subscriptions for multi-device live sync
+  // Realtime Supabase Channel Subscriptions + Heartbeat for multi-device live sync
   useEffect(() => {
     fetchAllData();
 
+    // 1. WebSocket Realtime channel (postgres changes + broadcast)
     const channel = supabase
-      .channel('queuesense-realtime-master-sync')
+      .channel('queuesense-global-sync', {
+        config: { broadcast: { self: true } },
+      })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'queue_entries' }, () => {
         fetchAllData();
       })
@@ -301,12 +305,34 @@ export const QueueProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications' }, () => {
         fetchAllData();
       })
+      .on('broadcast', { event: 'queue_update' }, () => {
+        fetchAllData();
+      })
       .subscribe();
 
+    channelRef.current = channel;
+
+    // 2. Light Heartbeat Poll (every 4 seconds) to guarantee sync across phones, tablets, and sleeping tabs
+    const interval = setInterval(() => {
+      fetchAllData();
+    }, 4000);
+
     return () => {
+      clearInterval(interval);
       supabase.removeChannel(channel);
     };
   }, [fetchAllData]);
+
+  // Broadcast event helper to immediately notify all other devices
+  const broadcastChange = useCallback((action: string) => {
+    try {
+      channelRef.current?.send({
+        type: 'broadcast',
+        event: 'queue_update',
+        payload: { action, timestamp: Date.now() },
+      });
+    } catch {}
+  }, []);
 
   // Register Walk-In Patient in Supabase PostgreSQL
   const registerPatient = async (data: {
@@ -399,7 +425,7 @@ export const QueueProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         .then(() => {});
     } catch {}
 
-    // 4. Send atomic Prisma write via backend API
+    // 4. Send atomic write via backend API
     fetch(`${API_BASE}/api/v1/patients`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -420,6 +446,9 @@ export const QueueProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         type: 'success',
       });
     } catch {}
+
+    // 6. Broadcast Realtime signal to immediately sync all open devices
+    broadcastChange('patient_registered');
 
     const newPatient: AppPatient = {
       id: queueEntryDbId,
@@ -482,6 +511,8 @@ export const QueueProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     // 3. Fastify backend consultation start
     fetch(`${API_BASE}/api/v1/consultations/${target.id}/start`, { method: 'POST' }).catch(() => {});
+
+    broadcastChange('patient_called');
 
     setPatients((prev) => {
       const updated = prev.map((p) => {
@@ -563,6 +594,8 @@ export const QueueProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       fetch(`${API_BASE}/api/v1/consultations/${nextPatient.id}/start`, { method: 'POST' }).catch(() => {});
     }
 
+    broadcastChange('patient_completed_and_next');
+
     setPatients((prev) => {
       const updated = prev.map((p) => {
         if (p.doctorId === doctorId && p.status === 'IN_PROGRESS') {
@@ -606,6 +639,8 @@ export const QueueProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       }).catch(() => {});
     }
 
+    broadcastChange('patient_noshow');
+
     setPatients((prev) => {
       const updated = prev.map((p) => {
         if (p.id === patientId || p.appointmentId === patientId || p.patientId === patientId) {
@@ -622,6 +657,7 @@ export const QueueProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setDoctors((prev) => prev.map((d) => (d.id === doctorId ? { ...d, availability: status } : d)));
     try {
       await supabase.from('doctors').update({ availability_status: status }).eq('id', doctorId);
+      broadcastChange('doctor_status_updated');
     } catch (e) {
       console.warn('Supabase doctor availability update error:', e);
     }
