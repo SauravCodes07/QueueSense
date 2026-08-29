@@ -3,16 +3,7 @@ import {
   BarChart3,
   ShieldCheck,
   Brain,
-  Layers,
-  Sparkles,
   RefreshCw,
-  Clock,
-  UserCheck,
-  AlertTriangle,
-  UserX,
-  ArrowRightLeft,
-  Activity,
-  CheckCircle2,
 } from 'lucide-react';
 import {
   ResponsiveContainer as RC,
@@ -38,7 +29,11 @@ import { apiAdmin } from '../services/api';
 import { useNotifications } from '../context/NotificationContext';
 import { AuditEvent, MLStatus } from '../types';
 
-export const AuditAndAnalytics: React.FC = () => {
+interface AuditAndAnalyticsProps {
+  lastEventTime?: number;
+}
+
+export const AuditAndAnalytics: React.FC<AuditAndAnalyticsProps> = ({ lastEventTime }) => {
   const { addNotification } = useNotifications();
 
   const [auditEvents, setAuditEvents] = useState<AuditEvent[]>([]);
@@ -69,6 +64,11 @@ export const AuditAndAnalytics: React.FC = () => {
   useEffect(() => {
     fetchData();
   }, []);
+
+  // Refresh in-place when live event triggers
+  useEffect(() => {
+    fetchData();
+  }, [lastEventTime]);
 
   const handleRetrainML = async () => {
     setIsTraining(true);
@@ -115,10 +115,10 @@ export const AuditAndAnalytics: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Top Header */}
-      <div className="glass-panel p-5 rounded-2xl border border-slate-200 dark:border-slate-800 flex items-center justify-between">
+      <div className="glass-panel p-4 sm:p-5 rounded-2xl border border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h2 className="text-xl font-display font-bold text-slate-900 dark:text-white flex items-center space-x-2">
-            <BarChart3 className="w-5 h-5 text-emerald-500" />
+          <h2 className="text-lg sm:text-xl font-display font-bold text-slate-900 dark:text-white flex items-center space-x-2">
+            <BarChart3 className="w-5 h-5 text-emerald-500 flex-shrink-0" />
             <span>Operational Analytics & Immutable Audit Trail</span>
           </h2>
           <p className="text-xs text-slate-500 dark:text-slate-400">
@@ -129,18 +129,18 @@ export const AuditAndAnalytics: React.FC = () => {
         <button
           onClick={fetchData}
           disabled={loading}
-          className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition-colors"
+          className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition-colors min-h-[36px] min-w-[36px] flex items-center justify-center self-end sm:self-auto"
           title="Refresh Data"
         >
           <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
         </button>
       </div>
 
-      {/* Analytics & ML Diagnostics Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Average Duration Bar Chart */}
-        <div className="lg:col-span-2 glass-panel p-6 rounded-2xl border border-slate-200 dark:border-slate-800">
-          <div className="flex items-center justify-between mb-4">
+      {/* Analytics & ML Diagnostics Row with min-w-0 for responsive Recharts calculation */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 sm:gap-6">
+        {/* Average Duration Bar Chart Column with min-w-0 */}
+        <div className="lg:col-span-2 glass-panel p-5 sm:p-6 rounded-2xl border border-slate-200 dark:border-slate-800 min-w-0 overflow-hidden">
+          <div className="flex items-center justify-between mb-4 gap-2">
             <div>
               <h3 className="font-semibold text-sm text-slate-900 dark:text-white">
                 Average Consultation Duration by Clinician
@@ -149,15 +149,15 @@ export const AuditAndAnalytics: React.FC = () => {
                 Dynamic average (minutes per patient) based on completed sessions
               </p>
             </div>
-            <span className="text-xs font-mono text-emerald-600 dark:text-emerald-400">7-day rolling</span>
+            <span className="text-xs font-mono text-emerald-600 dark:text-emerald-400 flex-shrink-0">7-day rolling</span>
           </div>
 
-          <div className="h-64 w-full">
+          <div className="h-60 sm:h-64 w-full min-w-0">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chartData} margin={{ top: 10, right: 20, left: -10, bottom: 0 }}>
+              <BarChart data={chartData} margin={{ top: 10, right: 10, left: -15, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" opacity={0.15} />
-                <XAxis dataKey="name" tick={{ fontSize: 12 }} stroke="#94a3b8" />
-                <YAxis tick={{ fontSize: 12 }} stroke="#94a3b8" unit="m" />
+                <XAxis dataKey="name" tick={{ fontSize: 11 }} stroke="#94a3b8" />
+                <YAxis tick={{ fontSize: 11 }} stroke="#94a3b8" unit="m" />
                 <Tooltip
                   contentStyle={{
                     backgroundColor: '#0f172a',
@@ -166,7 +166,7 @@ export const AuditAndAnalytics: React.FC = () => {
                     color: '#fff',
                     fontSize: '12px',
                   }}
-                  formatter={(value: any) => [`${value} minutes`, 'Avg Consultation']}
+                  formatter={(value: any) => [`${value} minutes`, 'Avg Duration']}
                 />
                 <Bar dataKey="avgMinutes" radius={[6, 6, 0, 0]}>
                   {chartData.map((_entry: any, index: number) => (
@@ -182,11 +182,11 @@ export const AuditAndAnalytics: React.FC = () => {
         </div>
 
         {/* ML Prediction Engine Health Card */}
-        <div className="glass-panel p-6 rounded-2xl border border-slate-200 dark:border-slate-800 flex flex-col justify-between">
+        <div className="glass-panel p-5 sm:p-6 rounded-2xl border border-slate-200 dark:border-slate-800 flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center space-x-2">
-                <Brain className="w-5 h-5 text-purple-500" />
+                <Brain className="w-5 h-5 text-purple-500 flex-shrink-0" />
                 <h3 className="font-semibold text-sm text-slate-900 dark:text-white">
                   ML Prediction Engine
                 </h3>
@@ -202,31 +202,31 @@ export const AuditAndAnalytics: React.FC = () => {
               </span>
             </div>
 
-            <div className="space-y-3 text-xs">
-              <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-700/60 flex justify-between items-center">
+            <div className="space-y-2.5 sm:space-y-3 text-xs">
+              <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-700/60 flex justify-between items-center gap-2">
                 <span className="text-slate-500 dark:text-slate-400">Model Architecture</span>
-                <span className="font-mono font-bold text-slate-900 dark:text-white">
-                  GradientBoostingRegressor
+                <span className="font-mono font-bold text-slate-900 dark:text-white text-right">
+                  GradientBoosting
                 </span>
               </div>
 
-              <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-700/60 flex justify-between items-center">
+              <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-700/60 flex justify-between items-center gap-2">
                 <span className="text-slate-500 dark:text-slate-400">Training Samples</span>
-                <span className="font-mono font-bold text-slate-900 dark:text-white">
+                <span className="font-mono font-bold text-slate-900 dark:text-white text-right tabular-nums">
                   {mlStatus?.samples_trained || 30} sessions
                 </span>
               </div>
 
-              <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-700/60 flex justify-between items-center">
-                <span className="text-slate-500 dark:text-slate-400">Model Mean Absolute Error</span>
-                <span className="font-mono font-bold text-purple-600 dark:text-purple-400">
+              <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-700/60 flex justify-between items-center gap-2">
+                <span className="text-slate-500 dark:text-slate-400">Model Error (MAE)</span>
+                <span className="font-mono font-bold text-purple-600 dark:text-purple-400 text-right tabular-nums">
                   {mlStatus?.mae_seconds || 18.0}s ({((mlStatus?.mae_seconds || 18) / 60).toFixed(1)}m)
                 </span>
               </div>
 
-              <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-700/60 flex justify-between items-center">
+              <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-700/60 flex justify-between items-center gap-2">
                 <span className="text-slate-500 dark:text-slate-400">Baseline EMA Comparison</span>
-                <span className="font-mono font-bold text-slate-700 dark:text-slate-300">
+                <span className="font-mono font-bold text-slate-700 dark:text-slate-300 text-right tabular-nums">
                   {mlStatus?.baseline_mae_seconds || 20.7}s
                 </span>
               </div>
@@ -237,7 +237,7 @@ export const AuditAndAnalytics: React.FC = () => {
             <button
               onClick={handleRetrainML}
               disabled={isTraining}
-              className="w-full py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-semibold text-xs transition-all shadow-md shadow-purple-600/20 active:scale-95 flex items-center justify-center space-x-2 disabled:opacity-50"
+              className="w-full py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-semibold text-xs transition-all shadow-md shadow-purple-600/20 active:scale-95 flex items-center justify-center space-x-2 disabled:opacity-50 min-h-[40px]"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${isTraining ? 'animate-spin' : ''}`} />
               <span>{isTraining ? 'Retraining Model...' : 'Retrain On Recent Sessions'}</span>
@@ -248,10 +248,10 @@ export const AuditAndAnalytics: React.FC = () => {
 
       {/* Immutable Audit Log Table */}
       <div className="glass-panel rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm">
-        <div className="p-5 border-b border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="p-4 sm:p-5 border-b border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
             <h3 className="font-display font-bold text-base text-slate-900 dark:text-white flex items-center space-x-2">
-              <ShieldCheck className="w-4 h-4 text-emerald-500" />
+              <ShieldCheck className="w-4 h-4 text-emerald-500 flex-shrink-0" />
               <span>Immutable Audit Event Stream ({filteredAuditEvents.length})</span>
             </h3>
             <p className="text-xs text-slate-500 dark:text-slate-400">
@@ -261,12 +261,12 @@ export const AuditAndAnalytics: React.FC = () => {
 
           {/* Action Filter */}
           <div className="flex items-center space-x-2">
-            <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">Filter Action:</span>
+            <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">Filter:</span>
             <select
               aria-label="Filter Audit Events by Action Type"
               value={filterAction}
               onChange={(e) => setFilterAction(e.target.value)}
-              className="bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1 text-xs font-medium text-slate-700 dark:text-slate-300 focus:outline-none cursor-pointer"
+              className="bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-300 focus:outline-none cursor-pointer min-h-[36px]"
             >
               <option value="ALL">All Actions</option>
               <option value="EMERGENCY_FLAGGED">Emergency Flagged</option>
@@ -283,11 +283,11 @@ export const AuditAndAnalytics: React.FC = () => {
           <table className="w-full text-left text-sm">
             <thead className="bg-slate-50 dark:bg-slate-900/50 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider sticky top-0 border-b border-slate-200 dark:border-slate-800">
               <tr>
-                <th className="px-5 py-3">Timestamp</th>
-                <th className="px-5 py-3">Action Type</th>
-                <th className="px-5 py-3">Actor</th>
-                <th className="px-5 py-3">Entity</th>
-                <th className="px-5 py-3">Reason / Context</th>
+                <th className="px-4 sm:px-5 py-3">Time</th>
+                <th className="px-4 sm:px-5 py-3">Action Type</th>
+                <th className="px-4 sm:px-5 py-3">Actor</th>
+                <th className="px-4 sm:px-5 py-3">Entity</th>
+                <th className="px-4 sm:px-5 py-3">Reason / Context</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
@@ -300,21 +300,21 @@ export const AuditAndAnalytics: React.FC = () => {
               ) : (
                 filteredAuditEvents.map((e) => (
                   <tr key={e.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/40 transition-colors text-xs">
-                    <td className="px-5 py-3 font-mono text-slate-500 dark:text-slate-400">
+                    <td className="px-4 sm:px-5 py-3 font-mono text-slate-500 dark:text-slate-400 tabular-nums whitespace-nowrap">
                       {new Date(e.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                     </td>
-                    <td className="px-5 py-3">
+                    <td className="px-4 sm:px-5 py-3 whitespace-nowrap">
                       <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold border ${getActionBadgeColor(e.action_type)}`}>
                         {e.action_type}
                       </span>
                     </td>
-                    <td className="px-5 py-3 font-medium text-slate-800 dark:text-slate-200">
+                    <td className="px-4 sm:px-5 py-3 font-medium text-slate-800 dark:text-slate-200 whitespace-nowrap">
                       {e.actor_name}
                     </td>
-                    <td className="px-5 py-3 font-mono text-slate-600 dark:text-slate-400">
+                    <td className="px-4 sm:px-5 py-3 font-mono text-slate-600 dark:text-slate-400 whitespace-nowrap">
                       {e.entity_type}:{e.entity_id}
                     </td>
-                    <td className="px-5 py-3 text-slate-600 dark:text-slate-300">
+                    <td className="px-4 sm:px-5 py-3 text-slate-600 dark:text-slate-300">
                       {e.metadata?.reason ||
                         e.metadata?.note ||
                         (e.metadata?.duration_seconds ? `Duration: ${e.metadata.duration_seconds}s` : JSON.stringify(e.metadata))}

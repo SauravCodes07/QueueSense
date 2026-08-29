@@ -5,14 +5,21 @@
 @tailwind utilities;
 
 @layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    scroll-behavior: smooth;
+  }
+
   body {
     @apply bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100 antialiased font-sans transition-colors duration-200;
+    min-height: 100vh;
+    min-height: 100dvh;
   }
 }
 
 /* Glassmorphism and depth utilities */
 .glass-panel {
-  @apply bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border border-slate-200/80 dark:border-slate-800/80 shadow-sm;
+  @apply bg-white/85 dark:bg-slate-900/85 backdrop-blur-md border border-slate-200/80 dark:border-slate-800/80 shadow-sm;
 }
 
 .glass-card {
@@ -20,7 +27,7 @@
 }
 
 .glass-pill {
-  @apply bg-white/60 dark:bg-slate-800/60 backdrop-blur-md border border-slate-200/60 dark:border-slate-700/60;
+  @apply bg-white/70 dark:bg-slate-800/70 backdrop-blur-md border border-slate-200/60 dark:border-slate-700/60;
 }
 
 /* Status indicator glows */

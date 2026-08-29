@@ -15,7 +15,7 @@ const MainAppContent: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'patient' | 'doctor' | 'reception' | 'analytics'>('patient');
   const [sseStatus, setSseStatus] = useState<SSEConnectionStatus>('connected');
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
-  const [stateVersion, setStateVersion] = useState(0);
+  const [lastEventTime, setLastEventTime] = useState<number>(Date.now());
 
   const { activeDoctorId, patientToken } = useAuth();
   const { addNotification } = useNotifications();
@@ -25,11 +25,11 @@ const MainAppContent: React.FC = () => {
     const doctorStream = new SSEStreamManager(`/doctors/${activeDoctorId}/queue`, {
       onStatusChange: (st) => setSseStatus(st),
       onQueueUpdate: (data) => {
-        setStateVersion((v) => v + 1);
-        if (data.reason) {
+        setLastEventTime(Date.now());
+        if (data.reason && data.reason !== 'connected') {
           addNotification(
             'Live Queue Update',
-            `Doctor queue updated. Reason: ${data.reason}`,
+            `Doctor queue updated. Reason: ${data.reason.replace(/_/g, ' ')}`,
             data.reason.includes('emergency') ? 'alert' : 'info'
           );
         }
@@ -47,12 +47,14 @@ const MainAppContent: React.FC = () => {
 
     const patientStream = new SSEStreamManager(`/patients/${patientToken}`, {
       onETAUpdate: (data) => {
-        setStateVersion((v) => v + 1);
-        addNotification(
-          'ETA Updated',
-          `Your estimated wait is now ${data.eta_low_minutes || 10}–${data.eta_high_minutes || 20} min (${data.eta_clock || ''}).`,
-          'info'
-        );
+        setLastEventTime(Date.now());
+        if (data.reason && data.reason !== 'connected') {
+          addNotification(
+            'ETA Updated',
+            `Your estimated wait is now ${data.eta_low_minutes || 10}–${data.eta_high_minutes || 20} min (${data.eta_clock || ''}).`,
+            'info'
+          );
+        }
       },
     });
 
@@ -62,11 +64,11 @@ const MainAppContent: React.FC = () => {
   }, [patientToken]);
 
   const handleTriggerStateMutated = () => {
-    setStateVersion((v) => v + 1);
+    setLastEventTime(Date.now());
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors duration-200">
+    <div className="min-h-screen min-h-[100dvh] flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors duration-200">
       {/* Scripted Incident Demo Bar */}
       <DemoControlBar
         activeDoctorId={activeDoctorId}
@@ -81,22 +83,22 @@ const MainAppContent: React.FC = () => {
         onOpenNotifications={() => setIsNotificationOpen(true)}
       />
 
-      {/* Main Tab Content Area */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
-        {activeTab === 'patient' && <PatientPortal key={`patient-${stateVersion}`} />}
-        {activeTab === 'doctor' && <DoctorDashboard key={`doctor-${stateVersion}-${activeDoctorId}`} />}
-        {activeTab === 'reception' && <ReceptionLiveBoard key={`reception-${stateVersion}`} />}
-        {activeTab === 'analytics' && <AuditAndAnalytics key={`analytics-${stateVersion}`} />}
+      {/* Main Tab Content Area with Stable Keying to prevent layout jumping */}
+      <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-8 safe-pb">
+        {activeTab === 'patient' && <PatientPortal lastEventTime={lastEventTime} />}
+        {activeTab === 'doctor' && <DoctorDashboard lastEventTime={lastEventTime} />}
+        {activeTab === 'reception' && <ReceptionLiveBoard lastEventTime={lastEventTime} />}
+        {activeTab === 'analytics' && <AuditAndAnalytics lastEventTime={lastEventTime} />}
       </main>
 
-      {/* Footer */}
-      <footer className="border-t border-slate-200 dark:border-slate-800/80 py-6 text-center text-xs text-slate-500 dark:text-slate-400 bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm">
+      {/* Responsive Footer */}
+      <footer className="border-t border-slate-200 dark:border-slate-800/80 py-4 sm:py-6 text-center text-xs text-slate-500 dark:text-slate-400 bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm safe-pb">
         <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
           <span>
-            <strong>QueueSense (PS7)</strong> — Dynamic Outpatient Velocity & Wait-Time Tracker
+            <strong>QueueSense (PS7)</strong> — Outpatient Velocity & Wait-Time Tracker
           </span>
           <span className="text-[11px] text-slate-400">
-            GradientBoostingRegressor ML + Pure EMA Fallback • Real-Time SSE Fanout • Zero False Precision
+            GradientBoostingRegressor + EMA Fallback • SSE Live Streaming • Zero False Precision
           </span>
         </div>
       </footer>

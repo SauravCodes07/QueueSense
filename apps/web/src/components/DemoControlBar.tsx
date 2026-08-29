@@ -2,10 +2,8 @@ import React, { useState, useEffect } from 'react';
 import {
   AlertTriangle,
   UserX,
-  Cpu,
   RotateCcw,
   Sparkles,
-  CheckCircle2,
   Brain,
   Layers,
   ChevronDown,
@@ -113,25 +111,25 @@ export const DemoControlBar: React.FC<DemoControlBarProps> = ({
 
   return (
     <aside aria-label="Demo Incident Controls" className="w-full bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 border-b border-indigo-500/30 text-white shadow-lg">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between py-2">
+      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
+        <div className="flex items-center justify-between py-2 gap-2">
           {/* Header pill */}
-          <div className="flex items-center space-x-2">
-            <span className="flex h-2.5 w-2.5 relative">
+          <div className="flex items-center space-x-2 min-w-0">
+            <span className="flex h-2.5 w-2.5 relative flex-shrink-0">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
               <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-indigo-500"></span>
             </span>
-            <span className="text-xs font-semibold uppercase tracking-wider text-indigo-300 flex items-center">
-              <Sparkles className="w-3.5 h-3.5 mr-1" /> Live Demo Incident Controls
+            <span className="text-xs font-semibold uppercase tracking-wider text-indigo-300 flex items-center truncate">
+              <Sparkles className="w-3.5 h-3.5 mr-1 flex-shrink-0" /> Live Demo Controls
             </span>
-            <span className="hidden sm:inline-block text-xs text-slate-400">
+            <span className="hidden md:inline-block text-xs text-slate-400 truncate">
               | Test real-time recalculations & ML fallback
             </span>
           </div>
 
           <button
             onClick={() => setIsExpanded(!isExpanded)}
-            className="text-xs text-indigo-300 hover:text-white flex items-center space-x-1"
+            className="text-xs text-indigo-300 hover:text-white flex items-center space-x-1 py-1 px-2 rounded-lg hover:bg-white/10 transition-colors flex-shrink-0 min-h-[36px]"
           >
             <span>{isExpanded ? 'Hide' : 'Show Controls'}</span>
             {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
@@ -139,48 +137,48 @@ export const DemoControlBar: React.FC<DemoControlBarProps> = ({
         </div>
 
         {isExpanded && (
-          <div className="pb-3 pt-1 flex flex-wrap items-center gap-2.5">
+          <div className="pb-3 pt-1 grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2">
             {/* Trigger Emergency Button */}
             <button
               onClick={handleTriggerEmergency}
               disabled={isWorking !== null}
-              className="flex items-center space-x-2 px-3 py-1.5 rounded-lg bg-rose-600/80 hover:bg-rose-600 text-white text-xs font-medium border border-rose-400/30 shadow-sm transition-all hover:scale-105 active:scale-95 disabled:opacity-50"
+              className="flex items-center justify-center space-x-1.5 px-3 py-2 rounded-xl bg-rose-600/90 hover:bg-rose-600 text-white text-xs font-medium border border-rose-400/30 shadow-sm transition-all active:scale-95 disabled:opacity-50 min-h-[40px]"
             >
-              <AlertTriangle className="w-3.5 h-3.5 text-rose-200" />
-              <span>{isWorking === 'emergency' ? 'Triggering...' : 'Trigger Emergency Priority'}</span>
+              <AlertTriangle className="w-3.5 h-3.5 text-rose-200 flex-shrink-0" />
+              <span className="truncate">{isWorking === 'emergency' ? 'Triggering...' : 'Emergency'}</span>
             </button>
 
             {/* Trigger No-Show Button */}
             <button
               onClick={handleTriggerNoShow}
               disabled={isWorking !== null}
-              className="flex items-center space-x-2 px-3 py-1.5 rounded-lg bg-amber-600/80 hover:bg-amber-600 text-white text-xs font-medium border border-amber-400/30 shadow-sm transition-all hover:scale-105 active:scale-95 disabled:opacity-50"
+              className="flex items-center justify-center space-x-1.5 px-3 py-2 rounded-xl bg-amber-600/90 hover:bg-amber-600 text-white text-xs font-medium border border-amber-400/30 shadow-sm transition-all active:scale-95 disabled:opacity-50 min-h-[40px]"
             >
-              <UserX className="w-3.5 h-3.5 text-amber-200" />
-              <span>{isWorking === 'noshow' ? 'Processing...' : 'Confirm No-Show Incident'}</span>
+              <UserX className="w-3.5 h-3.5 text-amber-200 flex-shrink-0" />
+              <span className="truncate">{isWorking === 'noshow' ? 'Processing...' : 'No-Show'}</span>
             </button>
 
             {/* ML Toggle Button */}
             <button
               onClick={handleToggleML}
               disabled={isWorking !== null}
-              className={`flex items-center space-x-2 px-3 py-1.5 rounded-lg text-xs font-medium border shadow-sm transition-all hover:scale-105 active:scale-95 disabled:opacity-50 ${
+              className={`flex items-center justify-center space-x-1.5 px-3 py-2 rounded-xl text-xs font-medium border shadow-sm transition-all active:scale-95 disabled:opacity-50 min-h-[40px] ${
                 mlStatus?.is_enabled
-                  ? 'bg-emerald-600/80 hover:bg-emerald-600 text-white border-emerald-400/30'
-                  : 'bg-slate-700/80 hover:bg-slate-700 text-slate-300 border-slate-500/30'
+                  ? 'bg-purple-600/90 hover:bg-purple-600 text-white border-purple-400/30'
+                  : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-600/40'
               }`}
             >
               {mlStatus?.is_enabled ? (
-                <Brain className="w-3.5 h-3.5 text-emerald-200" />
+                <Brain className="w-3.5 h-3.5 text-purple-200 flex-shrink-0" />
               ) : (
-                <Layers className="w-3.5 h-3.5 text-slate-300" />
+                <Layers className="w-3.5 h-3.5 text-slate-300 flex-shrink-0" />
               )}
-              <span>
+              <span className="truncate">
                 {isWorking === 'ml'
                   ? 'Switching...'
                   : mlStatus?.is_enabled
-                  ? 'ML Active (Click for EMA Fallback)'
-                  : 'EMA Fallback Active (Click for ML)'}
+                  ? 'ML Active (Click for EMA)'
+                  : 'EMA Active (Click for ML)'}
               </span>
             </button>
 
@@ -188,10 +186,10 @@ export const DemoControlBar: React.FC<DemoControlBarProps> = ({
             <button
               onClick={handleResetDemo}
               disabled={isWorking !== null}
-              className="flex items-center space-x-2 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium border border-slate-600/40 shadow-sm transition-all hover:scale-105 active:scale-95 disabled:opacity-50 ml-auto"
+              className="flex items-center justify-center space-x-1.5 px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium border border-slate-600/40 shadow-sm transition-all active:scale-95 disabled:opacity-50 sm:ml-auto min-h-[40px]"
             >
-              <RotateCcw className="w-3.5 h-3.5 text-slate-400" />
-              <span>{isWorking === 'reset' ? 'Resetting...' : 'Reset Demo State'}</span>
+              <RotateCcw className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+              <span className="truncate">{isWorking === 'reset' ? 'Resetting...' : 'Reset Demo'}</span>
             </button>
           </div>
         )}

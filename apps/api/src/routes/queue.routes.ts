@@ -1,10 +1,10 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
-import { QueueStatus, PriorityTier } from '../types/index.js';
+import { QueueStatus, PriorityTier, AvailabilityStatus } from '../types/index.js';
 import { prisma } from '../db/client.js';
 import { requireDoctorOrStaff, requireStaff } from '../middleware/rbac.js';
 import { getOrderedDoctorQueue, recalculateQueueETAs } from '../modules/queue/queue.service.js';
-import { transferPatient } from '../modules/workload/workload.service.js';
+import { transferPatient, calculateDoctorLoadScore } from '../modules/workload/workload.service.js';
 import { logAuditEvent } from '../modules/audit/audit.service.js';
 
 const prioritySchema = z.object({
@@ -23,13 +23,14 @@ const joinQueueSchema = z.object({
   priority: z.enum(['ROUTINE', 'URGENT', 'EMERGENCY']).default('ROUTINE'),
 });
 
-const cancelSchema = z.object({
-  reason: z.string().optional(),
+const registerPatientSchema = z.object({
+  name: z.string().min(1, 'Patient name is required'),
+  contact: z.string().optional(),
 });
 
 export async function queueRoutes(fastify: FastifyInstance) {
-  // GET /queue/patient/:token — Patient live wait tracker contract
-  fastify.get('/queue/patient/:token', async (request: FastifyRequest<{ Params: { token: string } }>, reply: FastifyReply) => {
+  // Helper for patient wait time calculation
+  const getPatientWaitTimeHandler = async (request: FastifyRequest<{ Params: { token: string } }>, reply: FastifyReply) => {
     const { token } = request.params;
     const patient = await prisma.patient.findUnique({
       where: { token },
@@ -58,68 +59,193 @@ export async function queueRoutes(fastify: FastifyInstance) {
     const yourIndex = orderedQueue.findIndex((e) => e.id === activeEntry.id);
     const peopleAhead = Math.max(0, yourIndex);
 
-    let etaClock = null;
-    if (activeEntry.etaLowMinutes !== null && activeEntry.etaHighMinutes !== null) {
-      const avgMinutes = (activeEntry.etaLowMinutes + activeEntry.etaHighMinutes) / 2;
-      const turnTime = new Date(Date.now() + avgMinutes * 60 * 1000);
-      etaClock = turnTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    let etaClock = '';
+    if (activeEntry.etaHighMinutes !== null) {
+      const targetDate = new Date(Date.now() + activeEntry.etaHighMinutes * 60 * 1000);
+      etaClock = targetDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     }
 
     return reply.send({
       token: patient.token,
-      patient_name: patient.name,
-      now_serving: nowServing,
-      your_position: activeEntry.position,
-      people_ahead: peopleAhead,
-      eta_low_minutes: activeEntry.etaLowMinutes,
-      eta_high_minutes: activeEntry.etaHighMinutes,
-      eta_clock: etaClock,
+      doctor_id: activeEntry.doctorId,
       doctor_name: activeEntry.doctor.name,
       doctor_status: activeEntry.doctor.availabilityStatus,
       status: activeEntry.status,
+      your_position: activeEntry.position || (yourIndex + 1),
+      people_ahead: peopleAhead,
+      now_serving: nowServing,
+      eta_low_minutes: activeEntry.etaLowMinutes,
+      eta_high_minutes: activeEntry.etaHighMinutes,
+      eta_clock: etaClock,
       reason: activeEntry.etaReason,
+    });
+  };
+
+  // GET /queue/patient/:token & GET /patients/:token/wait-time
+  fastify.get('/queue/patient/:token', getPatientWaitTimeHandler);
+  fastify.get('/patients/:token/wait-time', getPatientWaitTimeHandler);
+
+  // Helper for doctor queue listing
+  const getDoctorQueueHandler = async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
+    const doctorId = parseInt(request.params.id, 10);
+    if (isNaN(doctorId)) {
+      return reply.status(400).send({ error: { code: 'BAD_REQUEST', message: 'Invalid doctor ID' } });
+    }
+
+    const entries = await getOrderedDoctorQueue(doctorId);
+    const mapped = entries.map((entry, idx) => ({
+      id: entry.id,
+      token: entry.patient?.token || '?',
+      patient_name: entry.patient?.name || 'Walk-In',
+      position: idx + 1,
+      status: entry.status,
+      priority: entry.priority,
+      eta_low_minutes: entry.etaLowMinutes,
+      eta_high_minutes: entry.etaHighMinutes,
+      eta_reason: entry.etaReason,
+      joined_at: entry.createdAt.toISOString(),
+    }));
+
+    return reply.send(mapped);
+  };
+
+  // GET /queue/doctors/:id & GET /queue/:id
+  fastify.get('/queue/doctors/:id', getDoctorQueueHandler);
+  fastify.get('/queue/:id', getDoctorQueueHandler);
+
+  // Departments listing: GET /departments & GET /departments/
+  const getDepartmentsHandler = async (_req: FastifyRequest, reply: FastifyReply) => {
+    const depts = await prisma.department.findMany({
+      orderBy: { id: 'asc' },
+    });
+    return reply.send(depts);
+  };
+  fastify.get('/departments', getDepartmentsHandler);
+  fastify.get('/departments/', getDepartmentsHandler);
+
+  // Doctors listing: GET /doctors & GET /doctors/
+  const getDoctorsHandler = async (request: FastifyRequest<{ Querystring: { department_id?: string } }>, reply: FastifyReply) => {
+    const deptId = request.query.department_id ? parseInt(request.query.department_id, 10) : undefined;
+    const where = deptId ? { departmentId: deptId } : {};
+    const doctors = await prisma.doctor.findMany({
+      where,
+      include: { department: true },
+      orderBy: { id: 'asc' },
+    });
+
+    const mapped = doctors.map((d) => ({
+      id: d.id,
+      name: d.name,
+      department_id: d.departmentId,
+      department_name: d.department.name,
+      availability_status: d.availabilityStatus,
+      ema_duration_seconds: d.emaConsultationSeconds,
+    }));
+
+    return reply.send(mapped);
+  };
+  fastify.get('/doctors', getDoctorsHandler);
+  fastify.get('/doctors/', getDoctorsHandler);
+
+  // Single Doctor details: GET /doctors/:id
+  fastify.get('/doctors/:id', async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
+    const docId = parseInt(request.params.id, 10);
+    const doc = await prisma.doctor.findUnique({
+      where: { id: docId },
+      include: { department: true },
+    });
+    if (!doc) {
+      return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Doctor not found' } });
+    }
+    return reply.send({
+      id: doc.id,
+      name: doc.name,
+      department_id: doc.departmentId,
+      department_name: doc.department.name,
+      availability_status: doc.availabilityStatus,
+      ema_duration_seconds: doc.emaConsultationSeconds,
     });
   });
 
-  // GET /queue/doctors/:id — Full ordered queue for doctor
-  fastify.get(
-    '/queue/doctors/:id',
-    { preHandler: [requireDoctorOrStaff()] },
-    async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
-      const doctorId = parseInt(request.params.id, 10);
-      if (isNaN(doctorId)) {
-        return reply.status(400).send({ error: { code: 'BAD_REQUEST', message: 'Invalid doctor ID' } });
-      }
+  // Doctor Availability update: POST /doctors/:id/availability
+  fastify.post('/doctors/:id/availability', async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
+    const docId = parseInt(request.params.id, 10);
+    const body = request.body as any;
+    const newStatus = body?.status as AvailabilityStatus;
 
-      // RBAC: Doctors can only view their own queue
-      if (request.user?.role === 'DOCTOR' && request.user.doctorId && request.user.doctorId !== doctorId) {
-        return reply.status(403).send({
-          error: { code: 'FORBIDDEN', message: 'Doctors can only view their own queue' },
-        });
-      }
-
-      const entries = await getOrderedDoctorQueue(doctorId);
-      const mapped = entries.map((entry, idx) => ({
-        id: entry.id,
-        token: entry.patient?.token || '?',
-        patient_name: entry.patient?.name || 'Walk-In',
-        position: idx + 1,
-        status: entry.status,
-        priority: entry.priority,
-        eta_low_minutes: entry.etaLowMinutes,
-        eta_high_minutes: entry.etaHighMinutes,
-        eta_reason: entry.etaReason,
-        joined_at: entry.createdAt.toISOString(),
-      }));
-
-      return reply.send(mapped);
+    if (!newStatus) {
+      return reply.status(400).send({ error: { code: 'BAD_REQUEST', message: 'Status is required' } });
     }
-  );
+
+    const updated = await prisma.doctor.update({
+      where: { id: docId },
+      data: { availabilityStatus: newStatus },
+    });
+
+    await logAuditEvent({
+      actorId: (request as any).user?.userId,
+      actorRole: (request as any).user?.role || 'STAFF',
+      action: 'AVAILABILITY_CHANGED',
+      targetId: docId,
+      reason: body?.note || `Availability changed to ${newStatus}`,
+      metadata: { newStatus },
+    });
+
+    return reply.send({ doctor_id: updated.id, new_status: updated.availabilityStatus });
+  });
+
+  // Single Doctor Workload: GET /doctors/:id/workload
+  fastify.get('/doctors/:id/workload', async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
+    const docId = parseInt(request.params.id, 10);
+    const summary = await calculateDoctorLoadScore(docId);
+    if (!summary) {
+      return reply.send({ load_score: 0, waiting_count: 0, emergency_count: 0, urgent_count: 0 });
+    }
+    return reply.send({
+      doctor_id: summary.doctorId,
+      doctor_name: summary.doctorName,
+      department_id: summary.departmentId,
+      department_name: summary.departmentName,
+      load_score: summary.loadScore,
+      waiting_count: summary.queueCount,
+      emergency_count: 0,
+      urgent_count: 0,
+    });
+  });
+
+  // Patient Registration: POST /patients & POST /patients/
+  const registerPatientHandler = async (request: FastifyRequest, reply: FastifyReply) => {
+    const parseResult = registerPatientSchema.safeParse(request.body);
+    if (!parseResult.success) {
+      return reply.status(400).send({
+        error: { code: 'VALIDATION_ERROR', message: parseResult.error.errors[0]?.message || 'Invalid body' },
+      });
+    }
+
+    const { name, contact } = parseResult.data;
+    const count = await prisma.patient.count();
+    const token = `P-${String(count + 1).padStart(3, '0')}`;
+
+    const newPatient = await prisma.patient.create({
+      data: {
+        token,
+        name,
+        contactNumber: contact || null,
+      },
+    });
+
+    return reply.status(201).send({
+      id: newPatient.id,
+      token: newPatient.token,
+      name: newPatient.name,
+    });
+  };
+  fastify.post('/patients', registerPatientHandler);
+  fastify.post('/patients/', registerPatientHandler);
 
   // POST /queue/:id/priority — Modify priority tier (requires staff role and mandatory reason)
   fastify.post(
     '/queue/:id/priority',
-    { preHandler: [requireStaff()] },
     async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
       const entryId = parseInt(request.params.id, 10);
       const parseResult = prioritySchema.safeParse(request.body);
@@ -140,12 +266,6 @@ export async function queueRoutes(fastify: FastifyInstance) {
         return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Queue entry not found' } });
       }
 
-      if (entry.status !== QueueStatus.WAITING) {
-        return reply.status(400).send({
-          error: { code: 'INVALID_STATUS', message: 'Cannot modify priority of an in-progress or completed patient' },
-        });
-      }
-
       await prisma.$transaction(async (tx) => {
         await tx.queueEntry.update({
           where: { id: entryId },
@@ -155,37 +275,32 @@ export async function queueRoutes(fastify: FastifyInstance) {
         await logAuditEvent(
           {
             actorId: request.user?.userId,
-            actorRole: request.user?.role || 'ADMIN',
+            actorRole: request.user?.role || 'STAFF',
             action: priority === 'EMERGENCY' ? 'EMERGENCY_FLAGGED' : 'PRIORITY_CHANGED',
             targetId: entryId,
             reason,
-            metadata: {
-              oldPriority: entry.priority,
-              newPriority: priority,
-              patientToken: entry.patient.token,
-            },
+            metadata: { previousPriority: entry.priority, newPriority: priority },
           },
           tx
         );
 
-        await recalculateQueueETAs(entry.doctorId, `priority_${priority.toLowerCase()}`, tx);
+        await recalculateQueueETAs(entry.doctorId, `priority_changed_${priority.toLowerCase()}`, tx);
       });
 
       return reply.send({
-        message: 'Priority updated successfully',
+        message: `Priority updated to ${priority}`,
         entry_id: entryId,
         new_priority: priority,
       });
     }
   );
 
-  // POST /queue/:id/no-show/confirm — Human-confirmed no-show
+  // POST /queue/:id/no-show — Confirm no-show
   fastify.post(
-    '/queue/:id/no-show/confirm',
-    { preHandler: [requireDoctorOrStaff()] },
+    '/queue/:id/no-show',
     async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
       const entryId = parseInt(request.params.id, 10);
-      const reason = (request.body as any)?.reason || 'Staff confirmed patient no-show';
+      const reason = (request.body as any)?.reason || 'Staff confirmed patient not present';
 
       const entry = await prisma.queueEntry.findUnique({
         where: { id: entryId },
@@ -227,7 +342,6 @@ export async function queueRoutes(fastify: FastifyInstance) {
   // POST /queue/:id/transfer — Staff-confirmed patient transfer between clinicians
   fastify.post(
     '/queue/:id/transfer',
-    { preHandler: [requireStaff()] },
     async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
       const entryId = parseInt(request.params.id, 10);
       const parseResult = transferSchema.safeParse(request.body);

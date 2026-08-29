@@ -2,8 +2,8 @@ import React, { useEffect, useRef } from 'react';
 
 /**
  * Hero3DCanvas — Lightweight geometric node constellation canvas.
- * Renders an animated, interactive healthcare queue network mesh.
- * Extremely fast with zero lag (using pure HTML5 2D context with 3D projection math).
+ * Renders an animated healthcare queue network mesh with 3D projection math.
+ * Fully responsive and supports prefers-reduced-motion.
  */
 export const Hero3DCanvas: React.FC<{ className?: string }> = ({ className = '' }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -14,12 +14,15 @@ export const Hero3DCanvas: React.FC<{ className?: string }> = ({ className = '' 
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
     let animationFrameId: number;
     let width = (canvas.width = canvas.offsetWidth * window.devicePixelRatio);
     let height = (canvas.height = canvas.offsetHeight * window.devicePixelRatio);
 
-    // Particle / node definitions
-    const numPoints = 28;
+    // Particle / node definitions (reduced count on small screens for battery/perf)
+    const isMobile = window.innerWidth < 640;
+    const numPoints = isMobile ? 18 : 28;
     const points: Array<{ x: number; y: number; z: number; vx: number; vy: number; vz: number; pulse: number }> = [];
 
     for (let i = 0; i < numPoints; i++) {
@@ -40,8 +43,10 @@ export const Hero3DCanvas: React.FC<{ className?: string }> = ({ className = '' 
     const render = () => {
       ctx.clearRect(0, 0, width, height);
 
-      angleY += 0.003;
-      angleX = Math.sin(angleY * 0.5) * 0.15;
+      if (!prefersReducedMotion) {
+        angleY += 0.003;
+        angleX = Math.sin(angleY * 0.5) * 0.15;
+      }
 
       const cosY = Math.cos(angleY);
       const sinY = Math.sin(angleY);
@@ -53,14 +58,16 @@ export const Hero3DCanvas: React.FC<{ className?: string }> = ({ className = '' 
 
       for (let i = 0; i < points.length; i++) {
         const p = points[i];
-        p.x += p.vx;
-        p.y += p.vy;
-        p.z += p.vz;
-        p.pulse += 0.04;
+        if (!prefersReducedMotion) {
+          p.x += p.vx;
+          p.y += p.vy;
+          p.z += p.vz;
+          p.pulse += 0.04;
 
-        if (p.x < -200 || p.x > 200) p.vx *= -1;
-        if (p.y < -150 || p.y > 150) p.vy *= -1;
-        if (p.z < -200 || p.z > 200) p.vz *= -1;
+          if (p.x < -200 || p.x > 200) p.vx *= -1;
+          if (p.y < -150 || p.y > 150) p.vy *= -1;
+          if (p.z < -200 || p.z > 200) p.vz *= -1;
+        }
 
         // 3D rotation
         let x1 = p.x * cosY - p.z * sinY;
@@ -117,7 +124,9 @@ export const Hero3DCanvas: React.FC<{ className?: string }> = ({ className = '' 
         ctx.fill();
       }
 
-      animationFrameId = requestAnimationFrame(render);
+      if (!prefersReducedMotion) {
+        animationFrameId = requestAnimationFrame(render);
+      }
     };
 
     render();
@@ -126,6 +135,7 @@ export const Hero3DCanvas: React.FC<{ className?: string }> = ({ className = '' 
       if (!canvas) return;
       width = canvas.width = canvas.offsetWidth * window.devicePixelRatio;
       height = canvas.height = canvas.offsetHeight * window.devicePixelRatio;
+      if (prefersReducedMotion) render();
     };
 
     window.addEventListener('resize', handleResize);

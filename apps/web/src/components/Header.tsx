@@ -35,30 +35,33 @@ export const Header: React.FC<HeaderProps> = ({
 
   return (
     <header className="sticky top-0 z-40 w-full glass-panel border-b border-slate-200/80 dark:border-slate-800/80">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16">
+      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
+        <div className="flex items-center justify-between h-16 gap-2">
           {/* Logo & Product Title */}
-          <div className="flex items-center space-x-3 cursor-pointer" onClick={() => onTabChange('patient')}>
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center text-white shadow-md shadow-emerald-500/20">
+          <div
+            className="flex items-center space-x-2.5 sm:space-x-3 cursor-pointer min-w-0 flex-shrink-0"
+            onClick={() => onTabChange('patient')}
+          >
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center text-white shadow-md shadow-emerald-500/20 flex-shrink-0">
               <Activity className="w-5 h-5 animate-pulse" />
             </div>
-            <div>
-              <div className="flex items-center space-x-2">
-                <span className="font-display font-bold text-xl tracking-tight text-slate-900 dark:text-white">
+            <div className="min-w-0">
+              <div className="flex items-center space-x-1.5 sm:space-x-2">
+                <span className="font-display font-bold text-lg sm:text-xl tracking-tight text-slate-900 dark:text-white truncate">
                   Queue<span className="text-emerald-600 dark:text-emerald-400">Sense</span>
                 </span>
-                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
-                  <Sparkles className="w-3 h-3 mr-1" /> PS7
+                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] sm:text-xs font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 flex-shrink-0">
+                  <Sparkles className="w-2.5 h-2.5 sm:w-3 sm:h-3 mr-0.5" /> PS7
                 </span>
               </div>
-              <p className="text-xs text-slate-500 dark:text-slate-400 hidden sm:block">
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 hidden lg:block truncate">
                 Dynamic Outpatient Velocity & Wait-Time Tracker
               </p>
             </div>
           </div>
 
-          {/* Center Navigation Tabs */}
-          <nav className="hidden md:flex items-center p-1 rounded-xl bg-slate-100 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-700/60">
+          {/* Desktop Center Navigation Tabs */}
+          <nav aria-label="Main Navigation" className="hidden md:flex items-center p-1 rounded-xl bg-slate-100 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-700/60">
             <button
               onClick={() => onTabChange('patient')}
               className={`flex items-center space-x-2 px-3.5 py-1.5 rounded-lg text-sm font-medium transition-all ${
@@ -109,7 +112,7 @@ export const Header: React.FC<HeaderProps> = ({
           </nav>
 
           {/* Right Action Bar */}
-          <div className="flex items-center space-x-3">
+          <div className="flex items-center space-x-1.5 sm:space-x-3 flex-shrink-0">
             {/* Live SSE Status Pill */}
             <div
               className={`hidden sm:flex items-center space-x-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${
@@ -132,11 +135,11 @@ export const Header: React.FC<HeaderProps> = ({
               <span className="capitalize">{sseStatus === 'connected' ? 'Live SSE' : sseStatus}</span>
             </div>
 
-            {/* Demo Quick Persona Switcher */}
-            <div className="relative group">
+            {/* Persona Switcher Dropdown */}
+            <div className="relative">
               <select
                 aria-label="Switch User Role Persona"
-                className="bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer"
+                className="bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer max-w-[125px] sm:max-w-[170px] truncate"
                 value={
                   user?.email === 'dr.sharma@queuesense.demo'
                     ? 'sharma'
@@ -152,76 +155,89 @@ export const Header: React.FC<HeaderProps> = ({
                 }
                 onChange={(e) => loginAs(e.target.value)}
               >
-                <option value="admin">👤 Admin Staff</option>
-                <option value="reception">📋 Reception Desk</option>
-                <option value="sharma">🩺 Dr. Priya Sharma (General)</option>
-                <option value="mehta">🩺 Dr. Raj Mehta (Cardio)</option>
-                <option value="patel">🩺 Dr. Anita Patel (Paeds)</option>
+                <option value="admin">Admin Staff</option>
+                <option value="reception">Reception Desk</option>
+                <option value="sharma">Dr. Sharma (General)</option>
+                <option value="mehta">Dr. Mehta (Cardio)</option>
+                <option value="patel">Dr. Patel (Paeds)</option>
               </select>
             </div>
 
             {/* Notification Bell */}
             <button
               onClick={onOpenNotifications}
-              className="relative p-2 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              className="relative p-2 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors min-h-[40px] min-w-[40px] flex items-center justify-center"
               title="Notifications"
+              aria-label="Notifications"
             >
               <Bell className="w-5 h-5" />
               {unreadCount > 0 && (
-                <span className="absolute top-1 right-1 w-2.5 h-2.5 rounded-full bg-rose-500 ring-2 ring-white dark:ring-slate-900" />
+                <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 rounded-full bg-rose-500 ring-2 ring-white dark:ring-slate-900" />
               )}
             </button>
 
             {/* Theme Toggle */}
             <button
               onClick={toggleTheme}
-              className="p-2 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              className="p-2 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors min-h-[40px] min-w-[40px] flex items-center justify-center"
               title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+              aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
             >
               {theme === 'dark' ? <Sun className="w-5 h-5 text-amber-400" /> : <Moon className="w-5 h-5 text-slate-600" />}
             </button>
           </div>
         </div>
 
-        {/* Mobile Tab Bar */}
-        <div className="flex md:hidden items-center justify-around py-2 border-t border-slate-200 dark:border-slate-800">
+        {/* Mobile Responsive Bottom Tab Bar with Minimum 44px Touch Targets */}
+        <nav aria-label="Mobile Navigation" className="grid grid-cols-4 md:hidden py-1.5 border-t border-slate-200 dark:border-slate-800 gap-1">
           <button
             onClick={() => onTabChange('patient')}
-            className={`flex flex-col items-center text-xs ${
-              activeTab === 'patient' ? 'text-emerald-600 dark:text-emerald-400 font-semibold' : 'text-slate-500'
+            className={`flex flex-col items-center justify-center py-2 px-1 rounded-xl text-xs transition-colors min-h-[44px] ${
+              activeTab === 'patient'
+                ? 'text-emerald-600 dark:text-emerald-400 font-bold bg-emerald-50/50 dark:bg-emerald-950/30'
+                : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
             }`}
           >
             <Users className="w-4 h-4 mb-0.5" />
-            Patient
+            <span className="text-[11px] truncate">Patient</span>
           </button>
+
           <button
             onClick={() => onTabChange('doctor')}
-            className={`flex flex-col items-center text-xs ${
-              activeTab === 'doctor' ? 'text-emerald-600 dark:text-emerald-400 font-semibold' : 'text-slate-500'
+            className={`flex flex-col items-center justify-center py-2 px-1 rounded-xl text-xs transition-colors min-h-[44px] ${
+              activeTab === 'doctor'
+                ? 'text-emerald-600 dark:text-emerald-400 font-bold bg-emerald-50/50 dark:bg-emerald-950/30'
+                : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
             }`}
           >
             <Stethoscope className="w-4 h-4 mb-0.5" />
-            Doctor
+            <span className="text-[11px] truncate">Doctor</span>
           </button>
+
           <button
             onClick={() => onTabChange('reception')}
-            className={`flex flex-col items-center text-xs ${
-              activeTab === 'reception' ? 'text-emerald-600 dark:text-emerald-400 font-semibold' : 'text-slate-500'
+            className={`flex flex-col items-center justify-center py-2 px-1 rounded-xl text-xs transition-colors min-h-[44px] ${
+              activeTab === 'reception'
+                ? 'text-emerald-600 dark:text-emerald-400 font-bold bg-emerald-50/50 dark:bg-emerald-950/30'
+                : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
             }`}
           >
             <LayoutDashboard className="w-4 h-4 mb-0.5" />
-            Board
+            <span className="text-[11px] truncate">Board</span>
           </button>
+
           <button
             onClick={() => onTabChange('analytics')}
-            className={`flex flex-col items-center text-xs ${
-              activeTab === 'analytics' ? 'text-emerald-600 dark:text-emerald-400 font-semibold' : 'text-slate-500'
+            className={`flex flex-col items-center justify-center py-2 px-1 rounded-xl text-xs transition-colors min-h-[44px] ${
+              activeTab === 'analytics'
+                ? 'text-emerald-600 dark:text-emerald-400 font-bold bg-emerald-50/50 dark:bg-emerald-950/30'
+                : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
             }`}
           >
             <BarChart3 className="w-4 h-4 mb-0.5" />
-            Analytics
+            <span className="text-[11px] truncate">Analytics</span>
           </button>
-        </div>
+        </nav>
       </div>
     </header>
   );
