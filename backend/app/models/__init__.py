@@ -1,0 +1,33 @@
+from app.models.models import (
+    Department,
+    User,
+    Doctor,
+    DoctorAvailabilityLog,
+    Patient,
+    Appointment,
+    QueueEntry,
+    ConsultationSession,
+    WaitingTimePrediction,
+    EmergencyEvent,
+    NoShowEvent,
+    QueueTransfer,
+    NotificationEvent,
+    AuditEvent,
+)
+
+__all__ = [
+    "Department",
+    "User",
+    "Doctor",
+    "DoctorAvailabilityLog",
+    "Patient",
+    "Appointment",
+    "QueueEntry",
+    "ConsultationSession",
+    "WaitingTimePrediction",
+    "EmergencyEvent",
+    "NoShowEvent",
+    "QueueTransfer",
+    "NotificationEvent",
+    "AuditEvent",
+]
