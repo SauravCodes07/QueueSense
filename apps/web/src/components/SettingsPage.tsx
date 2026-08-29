@@ -6,12 +6,16 @@ import {
   Moon,
   CheckCircle2,
   Globe,
+  ShieldAlert,
+  Lock,
 } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { useLanguage } from '../context/LanguageContext';
 import { Language } from '../i18n/sourceStrings';
 
 export const SettingsPage: React.FC = () => {
+  const { user } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const { language, setLanguage, t } = useLanguage();
 
@@ -22,6 +26,31 @@ export const SettingsPage: React.FC = () => {
   const [copiedId, setCopiedId] = useState(false);
   const [copiedRegion, setCopiedRegion] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
+
+  // RBAC Access Control Guard: Settings is available ONLY to Administrators
+  if (user && user.role !== 'ADMIN') {
+    return (
+      <div className="min-h-[450px] flex items-center justify-center p-6 animate-in fade-in">
+        <div className="clinical-card max-w-md w-full p-8 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-center space-y-4 shadow-xl">
+          <div className="w-14 h-14 rounded-2xl bg-amber-50 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-800 text-amber-600 dark:text-amber-400 flex items-center justify-center mx-auto shadow-sm">
+            <Lock className="w-7 h-7" />
+          </div>
+          <div>
+            <h2 className="text-lg font-display font-bold text-slate-900 dark:text-white">
+              Administrator Access Required
+            </h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1.5 leading-relaxed">
+              Hospital Operations configuration and regional infrastructure settings are restricted to platform administrators.
+            </p>
+          </div>
+          <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-700 text-xs text-slate-600 dark:text-slate-300 flex items-center justify-center space-x-2">
+            <ShieldAlert className="w-4 h-4 text-amber-500" />
+            <span>Current Role: <b>{user.role}</b></span>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const handleCopy = (text: string, type: 'id' | 'region') => {
     navigator.clipboard.writeText(text);
@@ -71,17 +100,17 @@ export const SettingsPage: React.FC = () => {
                 CONFIGURATION
               </span>
               <div className="space-y-0.5">
-                {configTabs.map((t) => (
+                {configTabs.map((tab) => (
                   <button
-                    key={t.id}
-                    onClick={() => setActiveTab(t.id)}
-                    className={`w-full text-left px-3 py-2 rounded-xl font-medium transition-colors ${
-                      activeTab === t.id
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id)}
+                    className={`w-full text-left px-3 py-2 rounded-xl font-medium transition-colors cursor-pointer ${
+                      activeTab === tab.id
                         ? 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white font-bold'
                         : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50'
                     }`}
                   >
-                    {t.label}
+                    {tab.label}
                   </button>
                 ))}
               </div>
@@ -129,7 +158,7 @@ export const SettingsPage: React.FC = () => {
               <button
                 key={l.id}
                 onClick={() => setLanguage(l.id)}
-                className={`p-3.5 rounded-2xl border text-left transition-all ${
+                className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer ${
                   language === l.id
                     ? 'border-teal-500 bg-teal-50/60 dark:bg-teal-950/40 text-teal-900 dark:text-teal-100 ring-2 ring-teal-500/20'
                     : 'border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/60 text-slate-700 dark:text-slate-300'
@@ -184,7 +213,7 @@ export const SettingsPage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => handleCopy(projectId, 'id')}
-                className="px-3 py-2 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-750 text-xs font-medium text-slate-700 dark:text-slate-300 flex items-center space-x-1.5 shadow-subtle flex-shrink-0"
+                className="px-3 py-2 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-750 text-xs font-medium text-slate-700 dark:text-slate-300 flex items-center space-x-1.5 shadow-subtle flex-shrink-0 cursor-pointer"
               >
                 {copiedId ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
                 <span>{copiedId ? 'Copied' : 'Copy'}</span>
@@ -207,7 +236,7 @@ export const SettingsPage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => handleCopy(projectRegion, 'region')}
-                className="px-3 py-2 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-750 text-xs font-medium text-slate-700 dark:text-slate-300 flex items-center space-x-1.5 shadow-subtle flex-shrink-0"
+                className="px-3 py-2 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-750 text-xs font-medium text-slate-700 dark:text-slate-300 flex items-center space-x-1.5 shadow-subtle flex-shrink-0 cursor-pointer"
               >
                 {copiedRegion ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
                 <span>{copiedRegion ? 'Copied' : 'Copy'}</span>
@@ -228,9 +257,9 @@ export const SettingsPage: React.FC = () => {
             <button
               type="button"
               onClick={toggleTheme}
-              className="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-semibold flex items-center space-x-2"
+              className="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-semibold flex items-center space-x-2 cursor-pointer"
             >
-              {theme === 'dark' ? <Sun className="w-3.5 h-3.5 text-amber-400" /> : <Moon className="w-3.5 h-3.5" />}
+              {theme === 'dark' ? <Sun className="w-3.5 h-3.5 text-amber-400" /> : <Moon className="w-4 h-4" />}
               <span>Toggle Theme</span>
             </button>
           </div>
@@ -239,7 +268,7 @@ export const SettingsPage: React.FC = () => {
           <div className="pt-4 flex justify-end">
             <button
               type="submit"
-              className="px-5 py-2 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-semibold text-xs transition-all shadow-sm flex items-center space-x-1.5"
+              className="px-5 py-2 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-semibold text-xs transition-all shadow-sm flex items-center space-x-1.5 cursor-pointer"
             >
               <span>{t('common.save')}</span>
             </button>

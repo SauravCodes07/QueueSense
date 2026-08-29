@@ -12,7 +12,6 @@ interface AppShellProps {
   onExitToLanding?: () => void;
   selectedDepartment?: string;
   onSelectDepartment?: (dept: string) => void;
-  onResetDemo?: () => void;
   children: React.ReactNode;
 }
 
@@ -22,10 +21,8 @@ export const AppShell: React.FC<AppShellProps> = ({
   onOpenNotifications,
   onOpenDemoControls,
   onSwitchToPatientView,
-  onExitToLanding,
   selectedDepartment,
   onSelectDepartment,
-  onResetDemo,
   children,
 }) => {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
@@ -40,7 +37,6 @@ export const AppShell: React.FC<AppShellProps> = ({
           onSelectSection={onSelectSection}
           onOpenDemoControls={onOpenDemoControls || (() => {})}
           onSwitchToPatientView={onSwitchToPatientView || (() => {})}
-          onResetDemo={onResetDemo}
           isCollapsed={isSidebarCollapsed}
           onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
         />
@@ -70,7 +66,6 @@ export const AppShell: React.FC<AppShellProps> = ({
                 onSwitchToPatientView?.();
                 setIsMobileNavOpen(false);
               }}
-              onResetDemo={onResetDemo}
             />
           </div>
         </div>
@@ -84,6 +79,9 @@ export const AppShell: React.FC<AppShellProps> = ({
           onOpenNotifications={onOpenNotifications || (() => {})}
           onOpenDemoControls={onOpenDemoControls || (() => {})}
           onToggleMobileNav={() => setIsMobileNavOpen(!isMobileNavOpen)}
+          selectedDepartment={selectedDepartment}
+          onSelectDepartment={onSelectDepartment}
+          onSelectSection={onSelectSection}
         />
 
         {/* Workspace Content Viewport */}

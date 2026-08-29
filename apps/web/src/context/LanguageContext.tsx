@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
-import { sourceStrings, Language } from '../i18n/sourceStrings';
+import { sourceStrings, Language, dictionaries } from '../i18n/translations';
 import { translationService } from '../services/translationService';
 
 interface LanguageContextType {
@@ -34,57 +34,27 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     localStorage.setItem('queuesense_language', lang);
   }, []);
 
-  // Pre-fetch / translate all source strings when language changes to non-English
-  useEffect(() => {
-    if (language === 'en') return;
-
-    let isMounted = true;
-    setIsTranslating(true);
-
-    const stringValues = Object.values(sourceStrings);
-    translationService.translateBatch(stringValues, language).then(() => {
-      if (isMounted) {
-        setTranslationVersion((v) => v + 1);
-        setIsTranslating(false);
-      }
-    }).catch(() => {
-      if (isMounted) setIsTranslating(false);
-    });
-
-    return () => {
-      isMounted = false;
-    };
-  }, [language]);
-
-  // Main dynamic translation resolver
+  // Main synchronous instant translation resolver (0ms latency from dictionary)
   const t = useCallback(
     (key: string, params?: Record<string, string | number>): string => {
-      const englishText = sourceStrings[key] || key;
-      if (language === 'en') {
-        let res = englishText;
-        if (params) {
-          Object.entries(params).forEach(([pKey, pVal]) => {
-            res = res.replace(new RegExp(`{${pKey}}`, 'g'), String(pVal));
-          });
+      // 1. Direct dictionary match by key
+      const dict = dictionaries[language] || dictionaries.en;
+      let translated = dict[key];
+
+      // 2. Direct dictionary match by English value if key was raw English text
+      if (!translated && language !== 'en') {
+        const enKey = Object.entries(sourceStrings).find(([, val]) => val === key)?.[0];
+        if (enKey && dict[enKey]) {
+          translated = dict[enKey];
         }
-        return res;
       }
 
-      // Check runtime translation service cache
-      let translated = translationService.getCached(englishText, language);
-
+      // 3. Fallback to English source string or key itself
       if (!translated) {
-        // Request runtime translation if not already in-flight
-        const reqKey = `${language}:${englishText}`;
-        if (!requestedKeysRef.current.has(reqKey)) {
-          requestedKeysRef.current.add(reqKey);
-          translationService.translateText(englishText, language).then(() => {
-            setTranslationVersion((v) => v + 1);
-          });
-        }
-        translated = englishText; // graceful fallback while loading
+        translated = sourceStrings[key] || key;
       }
 
+      // 4. Parameter substitution
       let text = translated;
       if (params) {
         Object.entries(params).forEach(([pKey, pVal]) => {
@@ -94,7 +64,7 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
       return text;
     },
-    [language, translationVersion]
+    [language]
   );
 
   // Runtime Clinical Status Translation
@@ -177,7 +147,7 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         translateDepartment,
         formatNumber,
         formatTime,
-        isTranslating,
+        isTranslating: false,
       }}
     >
       {children}

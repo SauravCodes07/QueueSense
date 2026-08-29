@@ -23,6 +23,7 @@ export interface AppPatient {
   etaMinutes: number;
   expectedTime: string;
   completedAt?: string;
+  consultationStartedAt?: number;
 }
 
 export interface DoctorMeta {
@@ -61,7 +62,7 @@ interface QueueContextType {
     doctorId: number;
     priority?: 'ROUTINE' | 'URGENT' | 'EMERGENCY';
   }) => Promise<AppPatient>;
-  callPatient: (patientId: string | number) => Promise<void>;
+  callPatient: (patientId: string | number, doctorId?: number) => Promise<void>;
   completeAndCallNext: (doctorId: number) => Promise<void>;
   markNoShow: (patientId: string | number) => Promise<void>;
   setDoctorAvailability: (doctorId: number, status: DoctorMeta['availability']) => Promise<void>;
@@ -101,6 +102,8 @@ export const QueueProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [loading, setLoading] = useState<boolean>(true);
   const isFetchingRef = useRef(false);
   const channelRef = useRef<any>(null);
+  const patientsRef = useRef<AppPatient[]>([]);
+  patientsRef.current = patients;
 
   // Helper to re-calculate queue ordering and ETAs deterministically: EMERGENCY -> URGENT -> ROUTINE
   const recalculateAllQueues = useCallback((currentPatients: AppPatient[], currentDoctors: DoctorMeta[]): AppPatient[] => {
@@ -150,7 +153,7 @@ export const QueueProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       if (doctorsData && doctorsData.length > 0) {
         activeDocs = doctorsData.map((d: any, idx: number) => {
           const matchedDefault = DEFAULT_DOCTORS.find((def) => def.name.toLowerCase() === (d.name || '').toLowerCase()) || DEFAULT_DOCTORS[idx % DEFAULT_DOCTORS.length];
-          const rawStatus = (d.status || 'available').toUpperCase();
+          const rawStatus = (d.status || d.availability_status || 'available').toUpperCase();
           const availability =
             rawStatus === 'AVAILABLE' || rawStatus === 'BUSY' || rawStatus === 'ON_BREAK' || rawStatus === 'OFFLINE'
               ? rawStatus as DoctorMeta['availability']
@@ -197,7 +200,7 @@ export const QueueProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
           const doc =
             activeDocs.find((d) => d.dbId && row.doctor_id && String(d.dbId).toLowerCase() === String(row.doctor_id).toLowerCase()) ||
-            activeDocs.find((d) => d.id === row.doctor_id) ||
+            activeDocs.find((d) => String(d.id) === String(row.doctor_id)) ||
             activeDocs[0];
 
           const rawStatus = (row.status || 'waiting').toLowerCase();
@@ -211,6 +214,30 @@ export const QueueProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
           const patientName = matchedPatient?.name || row.patient_name || row.name || (row.token ? `Patient ${row.token}` : `Patient ${String(row.id).slice(0, 4)}`);
           const patientPhone = matchedPatient?.phone || row.contact || row.phone || '+91 98000 00000';
+
+          // Preserve active consultation start time from existing memory or localStorage
+          let consultationStartedAt: number | undefined;
+          if (status === 'IN_PROGRESS') {
+            const existingPatient = patientsRef.current.find(
+              (p) => String(p.id) === String(row.id) || String(p.dbId) === String(row.id) || (p.token && p.token === row.token)
+            );
+            if (existingPatient?.consultationStartedAt) {
+              consultationStartedAt = existingPatient.consultationStartedAt;
+            } else if (row.called_at) {
+              consultationStartedAt = new Date(row.called_at).getTime();
+            } else {
+              try {
+                const saved = localStorage.getItem(`queuesense_doc_${doc.id}_active_consultation`);
+                if (saved) {
+                  const parsed = JSON.parse(saved);
+                  if (parsed && (String(parsed.patientId) === String(row.id) || parsed.token === row.token)) {
+                    consultationStartedAt = parsed.startedAt;
+                  }
+                }
+              } catch {}
+            }
+            if (!consultationStartedAt) consultationStartedAt = Date.now();
+          }
 
           return {
             id: row.id,
@@ -234,6 +261,7 @@ export const QueueProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             etaMinutes: row.estimated_wait || 12,
             expectedTime: new Date(Date.now() + 15 * 60000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
             completedAt: row.completed_at ? new Date(row.completed_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : undefined,
+            consultationStartedAt,
           };
         });
 
@@ -308,7 +336,6 @@ export const QueueProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   useEffect(() => {
     fetchAllData();
 
-    // 1. WebSocket Realtime channel (postgres changes + broadcast)
     const channel = supabase
       .channel('queuesense-global-sync', {
         config: { broadcast: { self: true } },
@@ -335,7 +362,6 @@ export const QueueProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     channelRef.current = channel;
 
-    // 2. Light Heartbeat Poll (every 3 seconds) for mobile and cross-device sync
     const interval = setInterval(() => {
       fetchAllData();
     }, 3000);
@@ -380,7 +406,6 @@ export const QueueProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     let patientDbId: string | null = null;
     let appointmentDbId: string | null = null;
 
-    // 1. Direct INSERT into Supabase 'patients' table
     try {
       const { data: pInsert, error: pError } = await supabase
         .from('patients')
@@ -401,7 +426,6 @@ export const QueueProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       console.error('Supabase patients insert exception:', pEx);
     }
 
-    // 2. Direct INSERT into Supabase 'appointments' table
     try {
       if (patientDbId && doc.dbId) {
         const { data: aInsert, error: aError } = await supabase
@@ -426,7 +450,6 @@ export const QueueProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       console.error('Supabase appointments insert exception:', aEx);
     }
 
-    // 3. Broadcast notification in Supabase notifications table
     try {
       await supabase.from('notifications').insert({
         title: 'Patient Registered',
@@ -435,7 +458,6 @@ export const QueueProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       });
     } catch {}
 
-    // 4. Send atomic backup write to backend
     fetch(`${API_BASE}/api/v1/patients`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -448,7 +470,6 @@ export const QueueProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       }),
     }).catch(() => {});
 
-    // 5. Broadcast Realtime signal to immediately sync all open devices
     broadcastChange('patient_registered');
 
     const newPatient: AppPatient = {
@@ -478,20 +499,35 @@ export const QueueProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return newPatient;
   };
 
-  // CALL button: move patient into consultation for their assigned doctor in Supabase
-  const callPatient = async (patientId: string | number) => {
-    const target = patients.find((p) => p.id === patientId || p.appointmentId === patientId || p.dbId === patientId);
+  // CALL button: move ANY patient (Routine, Urgent, Emergency) into consultation for a doctor
+  const callPatient = async (patientId: string | number, doctorId?: number) => {
+    const target = patients.find(
+      (p) =>
+        String(p.id) === String(patientId) ||
+        String(p.appointmentId) === String(patientId) ||
+        String(p.dbId) === String(patientId) ||
+        String(p.token).toLowerCase() === String(patientId).toLowerCase()
+    );
     if (!target) return;
 
-    if (target.dbId) {
-      supabase
-        .from('appointments')
-        .update({ status: 'in_consultation', called_at: new Date().toISOString() })
-        .eq('id', target.dbId)
-        .then(() => {});
-    }
+    const targetDoctorId = doctorId || target.doctorId;
+    const doc = doctors.find((d) => d.id === targetDoctorId) || doctors[0];
+    const nowTimestamp = Date.now();
 
-    const prevInProgress = patients.find((p) => p.doctorId === target.doctorId && p.status === 'IN_PROGRESS');
+    // Persist consultation start in localStorage so it stays active across page navigation & refresh
+    try {
+      localStorage.setItem(
+        `queuesense_doc_${targetDoctorId}_active_consultation`,
+        JSON.stringify({
+          patientId: target.id,
+          token: target.token,
+          startedAt: nowTimestamp,
+        })
+      );
+    } catch {}
+
+    // Complete previous active in-progress patient for this doctor
+    const prevInProgress = patients.find((p) => p.doctorId === targetDoctorId && p.status === 'IN_PROGRESS');
     if (prevInProgress && prevInProgress.dbId) {
       supabase
         .from('appointments')
@@ -500,11 +536,24 @@ export const QueueProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         .then(() => {});
     }
 
+    if (target.dbId) {
+      supabase
+        .from('appointments')
+        .update({
+          status: 'in_consultation',
+          called_at: new Date(nowTimestamp).toISOString(),
+          doctor_id: doc.dbId || undefined,
+        })
+        .eq('id', target.dbId)
+        .then(() => {});
+    }
+
     broadcastChange('patient_called');
 
     setPatients((prev) => {
       const updated = prev.map((p) => {
-        if (p.doctorId === target.doctorId && p.status === 'IN_PROGRESS') {
+        // 1. Complete previous in-progress patient for this doctor
+        if (p.doctorId === targetDoctorId && p.status === 'IN_PROGRESS') {
           return {
             ...p,
             status: 'COMPLETED' as const,
@@ -513,8 +562,23 @@ export const QueueProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             completedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           };
         }
-        if (p.id === target.id) {
-          return { ...p, status: 'IN_PROGRESS' as const, position: 0, etaMinutes: 0 };
+        // 2. Put target patient into room
+        if (
+          String(p.id) === String(target.id) ||
+          String(p.dbId) === String(target.dbId) ||
+          (p.token && p.token === target.token)
+        ) {
+          return {
+            ...p,
+            doctorId: targetDoctorId,
+            doctorName: doc.name,
+            doctorRoom: doc.room,
+            department: doc.department,
+            status: 'IN_PROGRESS' as const,
+            position: 0,
+            etaMinutes: 0,
+            consultationStartedAt: nowTimestamp,
+          };
         }
         return p;
       });
@@ -522,7 +586,7 @@ export const QueueProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     });
   };
 
-  // COMPLETE & CALL NEXT button in Supabase
+  // COMPLETE & CALL NEXT button
   const completeAndCallNext = async (doctorId: number) => {
     const priorityWeight: Record<string, number> = { EMERGENCY: 1, URGENT: 2, ROUTINE: 3 };
     const inProgressPatient = patients.find((p) => p.doctorId === doctorId && p.status === 'IN_PROGRESS');
@@ -544,13 +608,31 @@ export const QueueProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       });
 
     const nextPatient = waitingList.length > 0 ? waitingList[0] : null;
+    const nowTimestamp = Date.now();
 
-    if (nextPatient && nextPatient.dbId) {
-      supabase
-        .from('appointments')
-        .update({ status: 'in_consultation', called_at: new Date().toISOString() })
-        .eq('id', nextPatient.dbId)
-        .then(() => {});
+    if (nextPatient) {
+      try {
+        localStorage.setItem(
+          `queuesense_doc_${doctorId}_active_consultation`,
+          JSON.stringify({
+            patientId: nextPatient.id,
+            token: nextPatient.token,
+            startedAt: nowTimestamp,
+          })
+        );
+      } catch {}
+
+      if (nextPatient.dbId) {
+        supabase
+          .from('appointments')
+          .update({ status: 'in_consultation', called_at: new Date(nowTimestamp).toISOString() })
+          .eq('id', nextPatient.dbId)
+          .then(() => {});
+      }
+    } else {
+      try {
+        localStorage.removeItem(`queuesense_doc_${doctorId}_active_consultation`);
+      } catch {}
     }
 
     broadcastChange('patient_completed_and_next');
@@ -566,8 +648,14 @@ export const QueueProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             completedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           };
         }
-        if (nextPatient && p.id === nextPatient.id) {
-          return { ...p, status: 'IN_PROGRESS' as const, position: 0, etaMinutes: 0 };
+        if (nextPatient && (String(p.id) === String(nextPatient.id) || (p.token && p.token === nextPatient.token))) {
+          return {
+            ...p,
+            status: 'IN_PROGRESS' as const,
+            position: 0,
+            etaMinutes: 0,
+            consultationStartedAt: nowTimestamp,
+          };
         }
         return p;
       });
@@ -577,7 +665,7 @@ export const QueueProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   // NO-SHOW button in Supabase
   const markNoShow = async (patientId: string | number) => {
-    const target = patients.find((p) => p.id === patientId || p.appointmentId === patientId || p.dbId === patientId);
+    const target = patients.find((p) => String(p.id) === String(patientId) || String(p.appointmentId) === String(patientId) || String(p.dbId) === String(patientId));
     if (target && target.dbId) {
       supabase
         .from('appointments')
@@ -590,7 +678,7 @@ export const QueueProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     setPatients((prev) => {
       const updated = prev.map((p) => {
-        if (p.id === patientId || p.appointmentId === patientId || p.dbId === patientId) {
+        if (String(p.id) === String(patientId) || String(p.appointmentId) === String(patientId) || String(p.dbId) === String(patientId)) {
           return { ...p, status: 'NO_SHOW' as const, position: -1, etaMinutes: 0 };
         }
         return p;
@@ -605,7 +693,7 @@ export const QueueProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const doc = doctors.find((d) => d.id === doctorId);
     if (doc?.dbId) {
       try {
-        await supabase.from('doctors').update({ status: status.toLowerCase() }).eq('id', doc.dbId);
+        await supabase.from('doctors').update({ availability_status: status, status: status.toLowerCase() }).eq('id', doc.dbId);
         broadcastChange('doctor_status_updated');
       } catch (e) {
         console.warn('Supabase doctor availability update error:', e);

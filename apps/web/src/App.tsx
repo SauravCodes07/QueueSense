@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { ThemeProvider } from './context/ThemeContext';
 import { LanguageProvider } from './context/LanguageContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
@@ -19,12 +19,10 @@ import { NotificationCenter } from './components/NotificationCenter';
 import { DemoControlModal } from './components/DemoControlModal';
 import { AuthModal } from './components/AuthModal';
 import { SSEStreamManager } from './services/sse';
-import { NavSection } from './types';
-import { Activity } from 'lucide-react';
+import { NavSection, UserRole } from './types';
 
-function getInitialSectionFromHash(): NavSection {
-  const hash = window.location.hash.replace(/^#\/?/, '').replace(/-/g, '_');
-  const validSections: NavSection[] = [
+const ROLE_ALLOWED_SECTIONS: Record<string, NavSection[]> = {
+  ADMIN: [
     'overview',
     'live_queues',
     'patients',
@@ -35,22 +33,54 @@ function getInitialSectionFromHash(): NavSection {
     'patient_portal',
     'doctor_console',
     'admin_overview',
-  ];
-  if (validSections.includes(hash as NavSection)) {
+  ],
+  DOCTOR: [
+    'doctor_console',
+    'live_queues',
+    'patients',
+    'doctors',
+    'notifications',
+  ],
+  RECEPTION: [
+    'overview',
+    'live_queues',
+    'patients',
+    'doctors',
+    'notifications',
+    'patient_portal',
+  ],
+  PATIENT: ['patient_portal'],
+};
+
+const DEFAULT_ROLE_SECTION: Record<string, NavSection> = {
+  ADMIN: 'overview',
+  DOCTOR: 'doctor_console',
+  RECEPTION: 'live_queues',
+  PATIENT: 'patient_portal',
+};
+
+function getInitialSectionFromHash(role: string = 'ADMIN'): NavSection {
+  const hash = window.location.hash.replace(/^#\/?/, '').replace(/-/g, '_');
+  const allowed = ROLE_ALLOWED_SECTIONS[role] || ROLE_ALLOWED_SECTIONS.ADMIN;
+
+  if (allowed.includes(hash as NavSection)) {
     return hash as NavSection;
   }
   const saved = localStorage.getItem('queuesense_active_section');
-  if (saved && validSections.includes(saved as NavSection)) {
+  if (saved && allowed.includes(saved as NavSection)) {
     return saved as NavSection;
   }
-  return 'overview';
+  return DEFAULT_ROLE_SECTION[role] || 'overview';
 }
 
 const MainAppRouter: React.FC = () => {
-  const { user, session, isAuthenticated, isLoading, activeDoctorId, patientToken, setPatientToken, loginAs, signOut } = useAuth();
+  const { user, isAuthenticated, isLoading, activeDoctorId, patientToken, setPatientToken, loginAs } = useAuth();
   const { addNotification } = useNotifications();
 
-  const [activeSection, setActiveSection] = useState<NavSection>(getInitialSectionFromHash);
+  const userRole = user?.role || 'ADMIN';
+  const allowedSections = useMemo(() => ROLE_ALLOWED_SECTIONS[userRole] || ROLE_ALLOWED_SECTIONS.ADMIN, [userRole]);
+
+  const [activeSection, setActiveSection] = useState<NavSection>(() => getInitialSectionFromHash(userRole));
   const [initialPatientToken, setInitialPatientToken] = useState<string | undefined>(undefined);
   const [selectedDepartment, setSelectedDepartment] = useState<string>('General Medicine (GM)');
 
@@ -60,23 +90,34 @@ const MainAppRouter: React.FC = () => {
   const [authModalMode, setAuthModalMode] = useState<'signin' | 'signup' | 'forgot'>('signin');
   const [lastEventTime, setLastEventTime] = useState<number>(Date.now());
 
-  // Synchronize section changes to URL hash & localStorage for refresh persistence
+  // Enforce RBAC route access whenever user role changes
+  useEffect(() => {
+    if (!allowedSections.includes(activeSection)) {
+      const fallback = DEFAULT_ROLE_SECTION[userRole] || 'overview';
+      setActiveSection(fallback);
+      localStorage.setItem('queuesense_active_section', fallback);
+      window.location.hash = `#${fallback.replace(/_/g, '-')}`;
+    }
+  }, [userRole, allowedSections, activeSection]);
+
+  // Synchronize section changes to URL hash & localStorage with RBAC check
   const handleSelectSection = (section: NavSection) => {
-    setActiveSection(section);
-    localStorage.setItem('queuesense_active_section', section);
-    window.location.hash = `#${section.replace(/_/g, '-')}`;
+    const targetSection = allowedSections.includes(section) ? section : (DEFAULT_ROLE_SECTION[userRole] || 'overview');
+    setActiveSection(targetSection);
+    localStorage.setItem('queuesense_active_section', targetSection);
+    window.location.hash = `#${targetSection.replace(/_/g, '-')}`;
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   // Hash listener for browser forward/back buttons
   useEffect(() => {
     const handleHashChange = () => {
-      const sec = getInitialSectionFromHash();
+      const sec = getInitialSectionFromHash(userRole);
       setActiveSection(sec);
     };
     window.addEventListener('hashchange', handleHashChange);
     return () => window.removeEventListener('hashchange', handleHashChange);
-  }, []);
+  }, [userRole]);
 
   // SSE Stream Listener for Active Doctor's Queue
   useEffect(() => {
@@ -153,21 +194,11 @@ const MainAppRouter: React.FC = () => {
 
   const handleAuthSuccess = () => {
     setIsAuthModalOpen(false);
-    handleSelectSection('overview');
+    handleSelectSection(DEFAULT_ROLE_SECTION[userRole] || 'overview');
   };
 
   const handleTriggerStateMutated = () => {
     setLastEventTime(Date.now());
-  };
-
-  const handleResetDemoState = async () => {
-    try {
-      await fetch('http://localhost:8000/api/v1/demo/reset', { method: 'POST' });
-      setLastEventTime(Date.now());
-      addNotification('Demo State Reset', 'Initial database dataset reseeded.', 'success');
-    } catch {
-      addNotification('Demo Reset Notice', 'Reset completed.', 'info');
-    }
   };
 
   // 1. Loading state while Supabase restores session
@@ -211,7 +242,7 @@ const MainAppRouter: React.FC = () => {
     );
   }
 
-  // 3. Authenticated: Protected Hospital Operations Workspace
+  // 3. Authenticated: Protected Hospital Operations Workspace with RBAC routing
   return (
     <>
       <AppShell
@@ -221,10 +252,9 @@ const MainAppRouter: React.FC = () => {
         onOpenNotifications={() => setIsNotificationOpen(true)}
         selectedDepartment={selectedDepartment}
         onSelectDepartment={setSelectedDepartment}
-        onResetDemo={handleResetDemoState}
       >
-        {/* Section 1: Admin Overview */}
-        {activeSection === 'overview' && (
+        {/* Section 1: Overview */}
+        {activeSection === 'overview' && allowedSections.includes('overview') && (
           <AdminOverview
             onNavigate={handleSelectSection}
             onSelectDepartment={setSelectedDepartment}
@@ -233,12 +263,12 @@ const MainAppRouter: React.FC = () => {
         )}
 
         {/* Section 2: Live Queue Board */}
-        {activeSection === 'live_queues' && (
+        {activeSection === 'live_queues' && allowedSections.includes('live_queues') && (
           <ReceptionLiveBoard lastEventTime={lastEventTime} />
         )}
 
         {/* Section 3: Patient Portal / Ticket Live Tracker */}
-        {activeSection === 'patient_portal' && (
+        {activeSection === 'patient_portal' && allowedSections.includes('patient_portal') && (
           <PatientPortal
             lastEventTime={lastEventTime}
             initialToken={initialPatientToken}
@@ -246,12 +276,12 @@ const MainAppRouter: React.FC = () => {
         )}
 
         {/* Section 4: Doctor Console */}
-        {activeSection === 'doctor_console' && (
+        {activeSection === 'doctor_console' && allowedSections.includes('doctor_console') && (
           <DoctorConsole lastEventTime={lastEventTime} />
         )}
 
         {/* Section 5: Admin Overview (Dedicated) */}
-        {activeSection === 'admin_overview' && (
+        {activeSection === 'admin_overview' && allowedSections.includes('admin_overview') && (
           <AdminOverview
             onNavigate={handleSelectSection}
             onSelectDepartment={setSelectedDepartment}
@@ -260,27 +290,27 @@ const MainAppRouter: React.FC = () => {
         )}
 
         {/* Section 6: Patients Roster */}
-        {activeSection === 'patients' && (
+        {activeSection === 'patients' && allowedSections.includes('patients') && (
           <PatientsPage />
         )}
 
         {/* Section 7: Specialist Directory & Roster */}
-        {activeSection === 'doctors' && (
+        {activeSection === 'doctors' && allowedSections.includes('doctors') && (
           <DoctorsPage />
         )}
 
         {/* Section 8: Analytics & Audit Log */}
-        {activeSection === 'analytics' && (
+        {activeSection === 'analytics' && allowedSections.includes('analytics') && (
           <AuditAndAnalytics lastEventTime={lastEventTime} />
         )}
 
         {/* Section 9: Notifications */}
-        {activeSection === 'notifications' && (
+        {activeSection === 'notifications' && allowedSections.includes('notifications') && (
           <NotificationsPage />
         )}
 
-        {/* Section 10: Settings */}
-        {activeSection === 'settings' && (
+        {/* Section 10: Settings (Admin Only) */}
+        {activeSection === 'settings' && allowedSections.includes('settings') && (
           <SettingsPage />
         )}
       </AppShell>
