@@ -1,0 +1,41 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: queuesense-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: queuesense
+      POSTGRES_PASSWORD: queuesense_password
+      POSTGRES_DB: queuesense
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U queuesense -d queuesense"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    container_name: queuesense-api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://queuesense:queuesense_password@postgres:5432/queuesense?schema=public
+      PORT: 8000
+      HOST: 0.0.0.0
+      NODE_ENV: production
+      JWT_SECRET: production_jwt_secret_key_at_least_32_chars
+    ports:
+      - "8000:8000"
+
+volumes:
+  postgres_data:

@@ -1,0 +1,133 @@
+// QueueSense — PostgreSQL / Supabase Production Schema
+// Defined per Section 7 of development.md
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum UserRole {
+  ADMIN
+  RECEPTION
+  DOCTOR
+  PATIENT
+}
+
+enum PriorityTier {
+  ROUTINE
+  URGENT
+  EMERGENCY
+}
+
+enum QueueStatus {
+  WAITING
+  IN_PROGRESS
+  DONE
+  NO_SHOW
+  CANCELLED
+  TRANSFERRED
+}
+
+enum AvailabilityStatus {
+  AVAILABLE
+  ON_BREAK
+  UNAVAILABLE
+  OFFLINE
+}
+
+model User {
+  id           Int       @id @default(autoincrement())
+  email        String    @unique
+  passwordHash String    @map("password_hash")
+  name         String
+  role         UserRole  @default(RECEPTION)
+  doctorId     Int?      @unique @map("doctor_id")
+  doctor       Doctor?   @relation(fields: [doctorId], references: [id])
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  @@map("users")
+}
+
+model Department {
+  id                         Int      @id @default(autoincrement())
+  name                       String   @unique
+  defaultConsultationMinutes Float    @default(12.0) @map("default_consultation_minutes")
+  doctors                    Doctor[]
+
+  @@map("departments")
+}
+
+model Doctor {
+  id                 Int                @id @default(autoincrement())
+  name               String
+  departmentId       Int                @map("department_id")
+  department         Department         @relation(fields: [departmentId], references: [id])
+  emaMinutes         Float              @default(12.0) @map("ema_minutes")
+  availabilityStatus AvailabilityStatus @default(AVAILABLE) @map("availability_status")
+  updatedAt          DateTime           @updatedAt @map("updated_at")
+  user               User?
+  queueEntries       QueueEntry[]
+
+  @@map("doctors")
+}
+
+model Patient {
+  id           Int          @id @default(autoincrement())
+  name         String
+  token        String       @unique
+  phone        String?
+  createdAt    DateTime     @default(now()) @map("created_at")
+  queueEntries QueueEntry[]
+
+  @@map("patients")
+}
+
+model QueueEntry {
+  id             Int            @id @default(autoincrement())
+  patientId      Int            @map("patient_id")
+  patient        Patient        @relation(fields: [patientId], references: [id])
+  doctorId       Int            @map("doctor_id")
+  doctor         Doctor         @relation(fields: [doctorId], references: [id])
+  priority       PriorityTier   @default(ROUTINE)
+  status         QueueStatus    @default(WAITING)
+  position       Int            @default(1)
+  softFlaggedAt  DateTime?      @map("soft_flagged_at")
+  etaLowMinutes  Int?           @map("eta_low_minutes")
+  etaHighMinutes Int?           @map("eta_high_minutes")
+  etaReason      String?        @map("eta_reason")
+  createdAt      DateTime       @default(now()) @map("created_at")
+  updatedAt      DateTime       @updatedAt @map("updated_at")
+  consultations  Consultation[]
+
+  @@index([doctorId, status, priority, createdAt])
+  @@map("queue_entries")
+}
+
+model Consultation {
+  id              Int        @id @default(autoincrement())
+  queueEntryId    Int        @map("queue_entry_id")
+  queueEntry      QueueEntry @relation(fields: [queueEntryId], references: [id])
+  startedAt       DateTime   @default(now()) @map("started_at")
+  endedAt         DateTime?  @map("ended_at")
+  durationSeconds Float?     @map("duration_seconds")
+
+  @@map("consultations")
+}
+
+model AuditEvent {
+  id        Int      @id @default(autoincrement())
+  actorId   Int?     @map("actor_id")
+  actorRole String   @map("actor_role")
+  action    String
+  targetId  Int      @map("target_id")
+  reason    String
+  metadata  String?  @map("metadata")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("audit_events")
+}
