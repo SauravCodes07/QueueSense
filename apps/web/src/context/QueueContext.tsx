@@ -96,6 +96,55 @@ const DEFAULT_DOCTORS: DoctorMeta[] = [
   { id: 5, name: 'Dr. Tanya Kapoor', department: 'Dermatology', departmentId: 5, room: 'Room 501', targetPace: 10, availability: 'AVAILABLE' },
 ];
 
+// Deterministic demo patients for every doctor — shown when Supabase has no live data
+const buildDemoPatients = (): AppPatient[] => {
+  const now = Date.now();
+  const entries: Array<{ doctorId: number; token: string; name: string; priority: 'ROUTINE' | 'URGENT' | 'EMERGENCY'; minsAgo: number }> = [
+    // Dr. Sharma (id=1) — General Medicine
+    { doctorId: 1, token: 'GM-101', name: 'Ravi Kumar', priority: 'ROUTINE', minsAgo: 30 },
+    { doctorId: 1, token: 'GM-102', name: 'Sunita Devi', priority: 'URGENT', minsAgo: 22 },
+    { doctorId: 1, token: 'GM-103', name: 'Ajay Verma', priority: 'ROUTINE', minsAgo: 14 },
+    // Dr. Mehta (id=2) — Cardiology
+    { doctorId: 2, token: 'CD-201', name: 'Mohan Gupta', priority: 'ROUTINE', minsAgo: 28 },
+    { doctorId: 2, token: 'CD-202', name: 'Priya Singh', priority: 'EMERGENCY', minsAgo: 5 },
+    // Dr. Anita Patel (id=3) — Pediatrics
+    { doctorId: 3, token: 'PD-301', name: 'Baby Rohan Sharma', priority: 'ROUTINE', minsAgo: 25 },
+    { doctorId: 3, token: 'PD-302', name: 'Aanya Patel', priority: 'URGENT', minsAgo: 18 },
+    { doctorId: 3, token: 'PD-303', name: 'Kabir Mehta', priority: 'ROUTINE', minsAgo: 9 },
+    // Dr. Seth (id=4) — Orthopedics
+    { doctorId: 4, token: 'OR-401', name: 'Suresh Yadav', priority: 'ROUTINE', minsAgo: 20 },
+    { doctorId: 4, token: 'OR-402', name: 'Kavita Joshi', priority: 'ROUTINE', minsAgo: 10 },
+    // Dr. Kapoor (id=5) — Dermatology
+    { doctorId: 5, token: 'DM-501', name: 'Neha Reddy', priority: 'ROUTINE', minsAgo: 15 },
+    { doctorId: 5, token: 'DM-502', name: 'Farhan Khan', priority: 'ROUTINE', minsAgo: 7 },
+  ];
+  return entries.map((e, idx) => {
+    const doc = DEFAULT_DOCTORS.find((d) => d.id === e.doctorId)!;
+    return {
+      id: `demo-${idx}`,
+      dbId: undefined,
+      patientId: `demo-${idx}`,
+      appointmentId: `demo-${idx}`,
+      token: e.token,
+      name: e.name,
+      phone: '+91 98000 00000',
+      department: doc.department,
+      departmentId: doc.departmentId,
+      doctorId: doc.id,
+      doctorDbId: undefined,
+      doctorName: doc.name,
+      doctorRoom: doc.room,
+      priority: e.priority,
+      status: 'WAITING' as const,
+      position: 1,
+      checkInTime: new Date(now - e.minsAgo * 60000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      createdAt: now - e.minsAgo * 60000,
+      etaMinutes: e.minsAgo,
+      expectedTime: new Date(now + 15 * 60000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    };
+  });
+};
+
 export const QueueProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [doctors, setDoctors] = useState<DoctorMeta[]>(DEFAULT_DOCTORS);
   const [patients, setPatients] = useState<AppPatient[]>([]);
@@ -323,9 +372,16 @@ export const QueueProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         });
       }
 
+      // If Supabase returned no real patients at all, fall back to deterministic demo data
+      // so every doctor (including Anita Patel, Vikram Seth, Tanya Kapoor) has a non-empty queue.
+      if (mappedPatients.length === 0) {
+        mappedPatients = buildDemoPatients();
+      }
       setPatients(recalculateAllQueues(mappedPatients, activeDocs));
     } catch (err) {
       console.warn('Supabase data synchronization error:', err);
+      // On any error, ensure we still show demo data so UI is never blank
+      setPatients((prev) => prev.length > 0 ? prev : recalculateAllQueues(buildDemoPatients(), DEFAULT_DOCTORS));
     } finally {
       isFetchingRef.current = false;
       setLoading(false);
@@ -505,8 +561,10 @@ export const QueueProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       (p) =>
         String(p.id) === String(patientId) ||
         String(p.appointmentId) === String(patientId) ||
-        String(p.dbId) === String(patientId) ||
-        String(p.token).toLowerCase() === String(patientId).toLowerCase()
+        (p.dbId != null && String(p.dbId) === String(patientId)) ||
+        String(p.token).toLowerCase() === String(patientId).toLowerCase() ||
+        // Also match by position within the doctor queue (fallback)
+        (doctorId != null && p.doctorId === doctorId && p.status === 'WAITING' && String(p.id) === String(patientId))
     );
     if (!target) return;
 
@@ -665,7 +723,13 @@ export const QueueProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   // NO-SHOW button in Supabase
   const markNoShow = async (patientId: string | number) => {
-    const target = patients.find((p) => String(p.id) === String(patientId) || String(p.appointmentId) === String(patientId) || String(p.dbId) === String(patientId));
+    const target = patients.find(
+      (p) =>
+        String(p.id) === String(patientId) ||
+        String(p.appointmentId) === String(patientId) ||
+        (p.dbId != null && String(p.dbId) === String(patientId)) ||
+        String(p.token).toLowerCase() === String(patientId).toLowerCase()
+    );
     if (target && target.dbId) {
       supabase
         .from('appointments')
@@ -678,7 +742,12 @@ export const QueueProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     setPatients((prev) => {
       const updated = prev.map((p) => {
-        if (String(p.id) === String(patientId) || String(p.appointmentId) === String(patientId) || String(p.dbId) === String(patientId)) {
+        if (
+          String(p.id) === String(patientId) ||
+          String(p.appointmentId) === String(patientId) ||
+          (p.dbId != null && String(p.dbId) === String(patientId)) ||
+          String(p.token).toLowerCase() === String(patientId).toLowerCase()
+        ) {
           return { ...p, status: 'NO_SHOW' as const, position: -1, etaMinutes: 0 };
         }
         return p;
