@@ -40,10 +40,12 @@ function mapSupabaseUserToQueueSenseUser(sbUser: SupabaseUser): User {
     metadata.name ||
     metadata.user_name ||
     sbUser.email?.split('@')[0] ||
-    'Authenticated User';
+    'Staff User';
 
   const avatarUrl = metadata.avatar_url || metadata.picture || undefined;
-  const role: UserRole = (metadata.role as UserRole) || (sbUser.email?.includes('dr.') ? 'DOCTOR' : sbUser.email?.includes('reception') ? 'RECEPTION' : 'ADMIN');
+  const role: UserRole =
+    (metadata.role as UserRole) ||
+    (sbUser.email?.includes('dr.') ? 'DOCTOR' : sbUser.email?.includes('reception') ? 'RECEPTION' : 'ADMIN');
 
   return {
     id: sbUser.id,
@@ -59,17 +61,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [supabaseUser, setSupabaseUser] = useState<SupabaseUser | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
 
   const [patientToken, setPatientToken] = useState<string | null>(() => {
-    return localStorage.getItem('queuesense_patient_token') || 'A-1';
+    return localStorage.getItem('queuesense_patient_token') || null;
   });
 
   const [activeDoctorId, setActiveDoctorId] = useState<number>(() => {
     return Number(localStorage.getItem('queuesense_active_doctor_id')) || 1;
   });
 
-  // Keep patient token synced in local storage
   useEffect(() => {
     if (patientToken) {
       localStorage.setItem('queuesense_patient_token', patientToken);
@@ -82,12 +83,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.setItem('queuesense_active_doctor_id', String(activeDoctorId));
   }, [activeDoctorId]);
 
-  // Initialize Supabase Auth Session & Subscribe to Auth State Changes
+  // Supabase Auth Session Initialization & Subscription
   useEffect(() => {
     let isMounted = true;
 
-    // 1. Check active session
-    supabase.auth.getSession().then(({ data: { session: initialSession }, error }) => {
+    // 1. Initial session check
+    supabase.auth.getSession().then(({ data: { session: initialSession } }) => {
       if (!isMounted) return;
       if (initialSession?.user) {
         setSession(initialSession);
@@ -96,16 +97,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setUser(mapped);
         if (mapped.doctor_id) setActiveDoctorId(mapped.doctor_id);
       } else {
-        // Fall back to saved local user session if any
         const saved = localStorage.getItem('queuesense_user');
         if (saved) {
           try {
             const parsed = JSON.parse(saved);
             setUser(parsed);
             if (parsed.doctor_id) setActiveDoctorId(parsed.doctor_id);
-          } catch {
-            // ignore
-          }
+          } catch {}
         }
       }
       setIsLoading(false);
@@ -126,6 +124,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           if (mapped.doctor_id) setActiveDoctorId(mapped.doctor_id);
         } else {
           setSupabaseUser(null);
+          setSession(null);
+          // Only clear if explicit sign out
+          if (_event === 'SIGNED_OUT') {
+            setUser(null);
+            localStorage.removeItem('queuesense_user');
+            localStorage.removeItem('queuesense_token');
+          }
         }
         setIsLoading(false);
       }
@@ -229,6 +234,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser(null);
       localStorage.removeItem('queuesense_token');
       localStorage.removeItem('queuesense_user');
+      localStorage.removeItem('queuesense_active_section');
     }
   };
 
@@ -246,7 +252,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // Quick Persona / Role Switcher for Clinicians & Demo
+  // Persona / Staff Switcher
   const loginAs = async (key: string) => {
     const demo = DEMO_USERS[key];
     if (!demo) return;
@@ -266,7 +272,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setActiveDoctorId(u.doctor_id);
       }
     } catch (e) {
-      console.warn('API login failed, using demo fallback state:', e);
       const u: User = {
         id: demo.doctorId || 1,
         email: demo.email,
@@ -282,8 +287,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const role: UserRole = user?.role || 'PATIENT';
-  const isAuthenticated = Boolean(user || supabaseUser);
+  const role: UserRole = user?.role || 'ADMIN';
+  const isAuthenticated = Boolean(user || supabaseUser || session?.user);
 
   return (
     <AuthContext.Provider
