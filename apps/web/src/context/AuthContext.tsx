@@ -29,6 +29,8 @@ const DEMO_USERS: Record<string, { email: string; pass: string; role: UserRole; 
   sharma: { email: 'dr.sharma@queuesense.demo', pass: 'Doctor@123', role: 'DOCTOR', name: 'Dr. Priya Sharma', doctorId: 1 },
   mehta: { email: 'dr.mehta@queuesense.demo', pass: 'Doctor@123', role: 'DOCTOR', name: 'Dr. Raj Mehta', doctorId: 2 },
   patel: { email: 'dr.patel@queuesense.demo', pass: 'Doctor@123', role: 'DOCTOR', name: 'Dr. Anita Patel', doctorId: 3 },
+  seth: { email: 'dr.seth@queuesense.demo', pass: 'Doctor@123', role: 'DOCTOR', name: 'Dr. Vikram Seth', doctorId: 4 },
+  kapoor: { email: 'dr.kapoor@queuesense.demo', pass: 'Doctor@123', role: 'DOCTOR', name: 'Dr. Tanya Kapoor', doctorId: 5 },
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -125,7 +127,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         } else {
           setSupabaseUser(null);
           setSession(null);
-          // Only clear if explicit sign out
           if (_event === 'SIGNED_OUT') {
             setUser(null);
             localStorage.removeItem('queuesense_user');
@@ -252,39 +253,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // Persona / Staff Switcher
+  // Instant Persona / Staff Switcher (0ms synchronous UI update)
   const loginAs = async (key: string) => {
     const demo = DEMO_USERS[key];
     if (!demo) return;
-    try {
-      const res = await apiAuth.login(demo.email, demo.pass);
-      localStorage.setItem('queuesense_token', res.access_token);
-      const u: User = {
-        id: res.user.id,
-        email: res.user.email,
-        name: res.user.name,
-        role: res.user.role as UserRole,
-        doctor_id: res.user.doctor_id,
-      };
-      setUser(u);
-      localStorage.setItem('queuesense_user', JSON.stringify(u));
-      if (u.doctor_id) {
-        setActiveDoctorId(u.doctor_id);
-      }
-    } catch (e) {
-      const u: User = {
-        id: demo.doctorId || 1,
-        email: demo.email,
-        name: demo.name,
-        role: demo.role,
-        doctor_id: demo.doctorId,
-      };
-      setUser(u);
-      localStorage.setItem('queuesense_user', JSON.stringify(u));
-      if (u.doctor_id) {
-        setActiveDoctorId(u.doctor_id);
-      }
+
+    const u: User = {
+      id: demo.doctorId || (demo.role === 'ADMIN' ? 99 : 98),
+      email: demo.email,
+      name: demo.name,
+      role: demo.role,
+      doctor_id: demo.doctorId,
+    };
+
+    setUser(u);
+    localStorage.setItem('queuesense_user', JSON.stringify(u));
+    if (u.doctor_id) {
+      setActiveDoctorId(u.doctor_id);
     }
+
+    // Non-blocking background API login token refresh
+    apiAuth.login(demo.email, demo.pass).then((res) => {
+      if (res?.access_token) {
+        localStorage.setItem('queuesense_token', res.access_token);
+      }
+    }).catch(() => {});
   };
 
   const role: UserRole = user?.role || 'ADMIN';

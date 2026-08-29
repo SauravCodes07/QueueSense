@@ -74,7 +74,7 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
   const handleRoleSwitch = async (roleKey: string) => {
     await loginAs(roleKey);
     setIsUserDropdownOpen(false);
-    if (roleKey === 'sharma' || roleKey === 'mehta' || roleKey === 'patel') {
+    if (['sharma', 'mehta', 'patel', 'seth', 'kapoor'].includes(roleKey)) {
       onSelectSection?.('doctor_console');
     } else if (roleKey === 'reception') {
       onSelectSection?.('live_queues');
@@ -92,7 +92,12 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
 
   const getUserSubtitle = () => {
     if (user?.role === 'DOCTOR') {
-      return `Doctor • ${user.name.includes('Sharma') ? 'Room 101' : user.name.includes('Mehta') ? 'Room 301' : 'Room 201'}`;
+      if (user.doctor_id === 1) return 'Doctor • Room 101 (General)';
+      if (user.doctor_id === 2) return 'Doctor • Room 301 (Cardiology)';
+      if (user.doctor_id === 3) return 'Doctor • Room 201 (Pediatrics)';
+      if (user.doctor_id === 4) return 'Doctor • Room 401 (Orthopedics)';
+      if (user.doctor_id === 5) return 'Doctor • Room 501 (Dermatology)';
+      return 'Doctor • Specialist';
     }
     if (user?.role === 'RECEPTION') {
       return 'Reception • Front Desk';
@@ -274,7 +279,7 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
           </button>
 
           {isUserDropdownOpen && (
-            <div className="absolute right-0 mt-2 w-60 p-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl z-50 text-xs space-y-1 animate-in fade-in">
+            <div className="absolute right-0 mt-2 w-64 p-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl z-50 text-xs space-y-1 animate-in fade-in">
               <div className="px-3 py-2 border-b border-slate-100 dark:border-slate-800">
                 <p className="font-bold text-slate-900 dark:text-white truncate">{user?.name || 'OPD Operations'}</p>
                 <p className="text-[11px] text-slate-500 truncate">{user?.email || 'ops@queuesense.hospital'}</p>
@@ -285,8 +290,11 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
               </div>
               {[
                 { id: 'admin', label: 'Admin (Executive Desk)' },
-                { id: 'sharma', label: 'Dr. Priya Sharma (General)' },
-                { id: 'mehta', label: 'Dr. Raj Mehta (Cardiology)' },
+                { id: 'sharma', label: 'Dr. Priya Sharma (General Medicine • 101)' },
+                { id: 'patel', label: 'Dr. Anita Patel (Pediatrics • 201)' },
+                { id: 'mehta', label: 'Dr. Raj Mehta (Cardiology • 301)' },
+                { id: 'seth', label: 'Dr. Vikram Seth (Orthopedics • 401)' },
+                { id: 'kapoor', label: 'Dr. Tanya Kapoor (Dermatology • 501)' },
                 { id: 'reception', label: 'Reception Front Desk' },
               ].map((p) => (
                 <button
