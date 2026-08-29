@@ -183,10 +183,20 @@ export const QueueProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       let mappedPatients: AppPatient[] = [];
 
       if (appointmentsData.length > 0) {
+        const matchedPatientIds = new Set<string>();
+
         mappedPatients = appointmentsData.map((row: any) => {
-          const matchedPatient = patientsData.find((p: any) => p.id === row.patient_id || p.token === row.token);
+          const matchedPatient = patientsData.find((p: any) =>
+            (p.id && row.patient_id && String(p.id).toLowerCase() === String(row.patient_id).toLowerCase()) ||
+            (p.token && row.token && String(p.token).toLowerCase() === String(row.token).toLowerCase())
+          );
+
+          if (matchedPatient?.id) {
+            matchedPatientIds.add(String(matchedPatient.id).toLowerCase());
+          }
+
           const doc =
-            activeDocs.find((d) => d.dbId === row.doctor_id) ||
+            activeDocs.find((d) => d.dbId && row.doctor_id && String(d.dbId).toLowerCase() === String(row.doctor_id).toLowerCase()) ||
             activeDocs.find((d) => d.id === row.doctor_id) ||
             activeDocs[0];
 
@@ -199,15 +209,15 @@ export const QueueProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           const rawPriority = (row.priority || matchedPatient?.priority || 'routine').toUpperCase();
           const priority = rawPriority === 'EMERGENCY' || rawPriority === 'URGENT' ? rawPriority : 'ROUTINE';
 
-          const patientName = matchedPatient?.name || row.patient_name || `Patient ${row.token || row.id}`;
-          const patientPhone = matchedPatient?.phone || row.contact || '+91 98000 00000';
+          const patientName = matchedPatient?.name || row.patient_name || row.name || (row.token ? `Patient ${row.token}` : `Patient ${String(row.id).slice(0, 4)}`);
+          const patientPhone = matchedPatient?.phone || row.contact || row.phone || '+91 98000 00000';
 
           return {
             id: row.id,
             dbId: row.id,
-            patientId: row.patient_id,
+            patientId: row.patient_id || matchedPatient?.id,
             appointmentId: row.id,
-            token: row.token || matchedPatient?.token || `P-${row.id.slice(0, 4)}`,
+            token: row.token || matchedPatient?.token || `P-${String(row.id).slice(0, 4)}`,
             name: patientName,
             phone: patientPhone,
             department: doc.department,
@@ -226,6 +236,36 @@ export const QueueProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             completedAt: row.completed_at ? new Date(row.completed_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : undefined,
           };
         });
+
+        // Add any standalone patients not yet linked to appointments
+        patientsData.forEach((p: any, idx: number) => {
+          if (!matchedPatientIds.has(String(p.id).toLowerCase())) {
+            const doc = activeDocs[0];
+            const rawPriority = (p.priority || 'routine').toUpperCase();
+            mappedPatients.push({
+              id: p.id,
+              dbId: p.id,
+              patientId: p.id,
+              appointmentId: p.id,
+              token: p.token || `P-${String(p.id).slice(0, 4)}`,
+              name: p.name || `Patient ${p.token}`,
+              phone: p.phone || '+91 98000 00000',
+              department: doc.department,
+              departmentId: doc.departmentId,
+              doctorId: doc.id,
+              doctorDbId: doc.dbId,
+              doctorName: doc.name,
+              doctorRoom: doc.room,
+              priority: rawPriority === 'EMERGENCY' || rawPriority === 'URGENT' ? rawPriority : 'ROUTINE',
+              status: 'WAITING',
+              position: idx + 1,
+              checkInTime: p.created_at ? new Date(p.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '10:00 AM',
+              createdAt: p.created_at ? new Date(p.created_at).getTime() : Date.now(),
+              etaMinutes: (idx + 1) * 12,
+              expectedTime: new Date(Date.now() + 15 * 60000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            });
+          }
+        });
       } else if (patientsData.length > 0) {
         mappedPatients = patientsData.map((p: any, idx: number) => {
           const doc = activeDocs[0];
@@ -235,8 +275,8 @@ export const QueueProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             dbId: p.id,
             patientId: p.id,
             appointmentId: p.id,
-            token: p.token || `P-${p.id.slice(0, 4)}`,
-            name: p.name,
+            token: p.token || `P-${String(p.id).slice(0, 4)}`,
+            name: p.name || `Patient ${p.token}`,
             phone: p.phone || '+91 98000 00000',
             department: doc.department,
             departmentId: doc.departmentId,

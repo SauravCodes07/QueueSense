@@ -53,7 +53,7 @@ export const DoctorConsole: React.FC<DoctorConsoleProps> = () => {
   };
 
   // CALL BUTTON
-  const handleCallPatient = (patientId: number) => {
+  const handleCallPatient = (patientId: string | number) => {
     const target = queue.find((p) => p.id === patientId);
     if (!target) return;
 
@@ -71,7 +71,7 @@ export const DoctorConsole: React.FC<DoctorConsoleProps> = () => {
     if (activePatient) {
       addNotification(
         'Consultation Completed',
-        `Completed visit for ${activePatient.token} (${activePatient.name}) in ${formatTimer(elapsedSeconds)}`,
+        `Finished session for ${activePatient.token} (${activePatient.name}).`,
         'success'
       );
     }
@@ -79,17 +79,17 @@ export const DoctorConsole: React.FC<DoctorConsoleProps> = () => {
     setElapsedSeconds(0);
   };
 
-  // NO-SHOW BUTTON
-  const handleNoShow = (patientId: number) => {
+  // NO SHOW BUTTON
+  const handleNoShow = (patientId: string | number) => {
     const target = queue.find((p) => p.id === patientId);
-    if (!target) return;
-
-    markNoShow(patientId);
-    addNotification(
-      'Patient Marked No-Show',
-      `${target.token} (${target.name}) marked as absent. Queue advanced.`,
-      'alert'
-    );
+    if (target) {
+      markNoShow(patientId);
+      addNotification(
+        'Patient Marked Absent',
+        `Patient ${target.token} marked as No-Show.`,
+        'alert'
+      );
+    }
   };
 
   return (
