@@ -135,7 +135,7 @@ export const QueueProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     });
   }, []);
 
-  // Fetch all Supabase records from public tables: departments, doctors, appointments, patients
+  // Primary Data Fetch: Direct from Supabase PostgreSQL Database
   const fetchAllData = useCallback(async () => {
     if (isFetchingRef.current) return;
     isFetchingRef.current = true;
@@ -148,27 +148,64 @@ export const QueueProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         activeDocs = doctorsData.map((d: any) => ({
           id: d.id,
           name: d.name,
-          department: d.department || d.specialty || 'General Medicine',
+          department: d.department || d.specialty || (d.department_id === 2 ? 'Cardiology' : d.department_id === 3 ? 'Pediatrics' : d.department_id === 4 ? 'Orthopedics' : d.department_id === 5 ? 'Dermatology' : 'General Medicine'),
           departmentId: d.department_id || 1,
-          room: d.room || `Room ${100 + d.id}`,
+          room: d.room || `Room ${100 + d.id * 100 - 99}`,
           targetPace: d.target_pace || d.ema_minutes || 12,
           availability: d.availability_status || d.status || 'AVAILABLE',
         }));
         setDoctors(activeDocs);
       }
 
-      // 2. Fetch all appointments and patients from Supabase
-      const [appRes, patRes] = await Promise.all([
+      // 2. Fetch from queue_entries, appointments, and patients tables in Supabase
+      const [queueRes, appRes, patRes] = await Promise.all([
+        supabase.from('queue_entries').select('*, patient:patients(*), doctor:doctors(*)').order('created_at', { ascending: true }),
         supabase.from('appointments').select('*').order('created_at', { ascending: true }),
         supabase.from('patients').select('*').order('created_at', { ascending: true }),
       ]);
 
+      const queueData = queueRes.data || [];
       const appointmentsData = appRes.data || [];
       const patientsData = patRes.data || [];
 
       let mappedPatients: AppPatient[] = [];
 
-      if (appointmentsData.length > 0) {
+      if (queueData.length > 0) {
+        mappedPatients = queueData.map((row: any) => {
+          const doc = activeDocs.find((d) => d.id === row.doctor_id) || activeDocs[0];
+          const rawStatus = (row.status || 'WAITING').toUpperCase();
+          const status =
+            rawStatus === 'IN_PROGRESS' || rawStatus === 'IN_CONSULTATION' ? 'IN_PROGRESS' :
+            rawStatus === 'COMPLETED' ? 'COMPLETED' :
+            rawStatus === 'NO_SHOW' ? 'NO_SHOW' : 'WAITING';
+
+          const priority = (row.priority || 'ROUTINE').toUpperCase() as AppPatient['priority'];
+          const patientName = row.patient?.name || `Patient ${row.patient?.token || row.id}`;
+          const patientPhone = row.patient?.phone || '+91 98000 00000';
+
+          return {
+            id: row.id,
+            patientId: row.patient_id,
+            appointmentId: row.id,
+            token: row.patient?.token || `P-${row.patient_id || row.id}`,
+            name: patientName,
+            phone: patientPhone,
+            department: doc.department,
+            departmentId: doc.departmentId,
+            doctorId: row.doctor_id || doc.id,
+            doctorName: doc.name,
+            doctorRoom: doc.room,
+            priority: priority === 'EMERGENCY' || priority === 'URGENT' ? priority : 'ROUTINE',
+            status,
+            position: row.position || 1,
+            checkInTime: row.created_at ? new Date(row.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '10:00 AM',
+            createdAt: row.created_at ? new Date(row.created_at).getTime() : Date.now(),
+            etaMinutes: row.eta_low_minutes || 12,
+            expectedTime: new Date(Date.now() + 15 * 60000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            completedAt: row.updated_at && status === 'COMPLETED' ? new Date(row.updated_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : undefined,
+          };
+        });
+      } else if (appointmentsData.length > 0) {
         mappedPatients = appointmentsData.map((row: any) => {
           const doc = activeDocs.find((d) => d.id === row.doctor_id) || activeDocs[0];
           const matchedPatient = patientsData.find((p: any) => p.id === row.patient_id || p.token === row.token);
@@ -181,7 +218,7 @@ export const QueueProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
           const priority = (row.priority || 'ROUTINE').toUpperCase() as AppPatient['priority'];
           const patientName = row.patient_name || matchedPatient?.name || row.name || `Patient ${row.token || row.id}`;
-          const patientPhone = row.contact || row.phone || matchedPatient?.phone || matchedPatient?.contact || '+91 98000 00000';
+          const patientPhone = row.contact || row.phone || matchedPatient?.phone || '+91 98000 00000';
 
           return {
             id: row.id,
@@ -206,7 +243,6 @@ export const QueueProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           };
         });
       } else if (patientsData.length > 0) {
-        // If patients table has rows without appointments table entries
         mappedPatients = patientsData.map((p: any, idx: number) => {
           const doc = activeDocs[0];
           return {
@@ -247,6 +283,9 @@ export const QueueProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     const channel = supabase
       .channel('queuesense-realtime-master-sync')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'queue_entries' }, () => {
+        fetchAllData();
+      })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'patients' }, () => {
         fetchAllData();
       })
@@ -269,7 +308,7 @@ export const QueueProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     };
   }, [fetchAllData]);
 
-  // Register Walk-In Patient in Supabase
+  // Register Walk-In Patient in Supabase PostgreSQL
   const registerPatient = async (data: {
     name: string;
     phone?: string;
@@ -289,99 +328,103 @@ export const QueueProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const priority = data.priority || 'ROUTINE';
     const checkInTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-    let patientDbId: any = null;
-    let appointmentDbId: any = null;
+    let patientDbId: number = Date.now();
+    let queueEntryDbId: number = Date.now();
 
-    // 1. Insert into Supabase 'patients' table
+    // 1. Direct INSERT into Supabase 'patients' table
     try {
       const { data: pInsert, error: pError } = await supabase
         .from('patients')
-        .insert([
-          {
-            name: data.name.trim(),
-            token,
-            phone: data.phone?.trim() || '+91 98000 00000',
-          },
-        ])
+        .insert({
+          name: data.name.trim(),
+          token,
+          phone: data.phone?.trim() || '+91 98000 00000',
+        })
         .select()
         .single();
 
       if (pError) {
-        console.warn('Patients table insert note:', pError);
-        // Try fallback with contact column
-        const retryP = await supabase
-          .from('patients')
-          .insert([{ name: data.name.trim(), token, contact: data.phone?.trim() || '+91 98000 00000' }])
-          .select()
-          .single();
-        if (retryP.data) patientDbId = retryP.data.id;
-      } else if (pInsert) {
+        console.error('Supabase patients insert error:', pError);
+      } else if (pInsert?.id) {
         patientDbId = pInsert.id;
       }
-    } catch (err) {
-      console.warn('Supabase patients insert exception:', err);
+    } catch (pEx) {
+      console.error('Supabase patients insert exception:', pEx);
     }
 
-    // 2. Insert into Supabase 'appointments' table
+    // 2. Direct INSERT into Supabase 'queue_entries' table
     try {
-      const { data: aInsert, error: aError } = await supabase
-        .from('appointments')
-        .insert([
-          {
-            patient_id: patientDbId || undefined,
-            patient_name: data.name.trim(),
-            token,
-            contact: data.phone?.trim() || '+91 98000 00000',
-            department: doc.department,
-            department_id: doc.departmentId,
-            doctor_id: doc.id,
-            doctor_name: doc.name,
-            priority,
-            status: 'waiting',
-            arrival_time: checkInTime,
-            appointment_date: new Date().toISOString().split('T')[0],
-          },
-        ])
+      const { data: qInsert, error: qError } = await supabase
+        .from('queue_entries')
+        .insert({
+          patient_id: patientDbId,
+          doctor_id: doc.id,
+          priority,
+          status: 'WAITING',
+          position: 1,
+          eta_low_minutes: 10,
+          eta_high_minutes: 20,
+        })
         .select()
         .single();
 
-      if (aError) {
-        console.warn('Appointments table insert note:', aError);
-      } else if (aInsert) {
-        appointmentDbId = aInsert.id;
+      if (qError) {
+        console.error('Supabase queue_entries insert error:', qError);
+      } else if (qInsert?.id) {
+        queueEntryDbId = qInsert.id;
       }
-    } catch (err) {
-      console.warn('Supabase appointments insert exception:', err);
+    } catch (qEx) {
+      console.error('Supabase queue_entries insert exception:', qEx);
     }
 
-    // 3. Broadcast notification in Supabase notifications table
+    // 3. Direct INSERT into Supabase 'appointments' table
     try {
-      await supabase.from('notifications').insert([
-        {
-          title: 'Patient Enrolled',
-          message: `Token ${token} assigned to ${data.name} for ${doc.name} (${doc.department})`,
-          type: 'success',
-        },
-      ]);
+      await supabase
+        .from('appointments')
+        .insert({
+          patient_id: patientDbId,
+          patient_name: data.name.trim(),
+          token,
+          contact: data.phone?.trim() || '+91 98000 00000',
+          department: doc.department,
+          department_id: doc.departmentId,
+          doctor_id: doc.id,
+          doctor_name: doc.name,
+          priority,
+          status: 'waiting',
+          arrival_time: checkInTime,
+          appointment_date: new Date().toISOString().split('T')[0],
+        })
+        .select()
+        .then(() => {});
     } catch {}
 
-    // 4. Also call backend API to sync PostgreSQL if running
+    // 4. Send atomic Prisma write via backend API
     fetch(`${API_BASE}/api/v1/patients`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        name: data.name,
-        contact: data.phone,
+        name: data.name.trim(),
+        contact: data.phone?.trim() || '+91 98000 00000',
         doctor_id: doc.id,
         department_id: doc.departmentId,
         priority,
       }),
     }).catch(() => {});
 
+    // 5. Broadcast notification in Supabase notifications table
+    try {
+      await supabase.from('notifications').insert({
+        title: 'Patient Registered',
+        message: `Token ${token} assigned to ${data.name} for ${doc.name} (${doc.department})`,
+        type: 'success',
+      });
+    } catch {}
+
     const newPatient: AppPatient = {
-      id: appointmentDbId || patientDbId || Date.now(),
-      patientId: patientDbId || Date.now(),
-      appointmentId: appointmentDbId || Date.now(),
+      id: queueEntryDbId,
+      patientId: patientDbId,
+      appointmentId: queueEntryDbId,
       token,
       name: data.name,
       phone: data.phone || '+91 98000 00000',
@@ -405,34 +448,39 @@ export const QueueProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   // CALL button: move patient into consultation for their assigned doctor in Supabase
   const callPatient = async (patientId: number) => {
-    const target = patients.find((p) => p.id === patientId || p.appointmentId === patientId);
+    const target = patients.find((p) => p.id === patientId || p.appointmentId === patientId || p.patientId === patientId);
     if (!target) return;
 
-    // 1. Update Supabase appointment status to in_consultation
-    const { error } = await supabase
-      .from('appointments')
-      .update({
-        status: 'in_consultation',
-        called_at: new Date().toISOString(),
-        consultation_started_at: new Date().toISOString(),
-      })
-      .eq('id', target.appointmentId || target.id);
+    // 1. Update Supabase queue_entries & appointments status to IN_PROGRESS
+    supabase
+      .from('queue_entries')
+      .update({ status: 'IN_PROGRESS', updated_at: new Date().toISOString() })
+      .eq('id', target.appointmentId || target.id)
+      .then(() => {});
 
-    if (error) console.error('Supabase call patient error:', error);
+    supabase
+      .from('appointments')
+      .update({ status: 'in_consultation', called_at: new Date().toISOString() })
+      .eq('id', target.appointmentId || target.id)
+      .then(() => {});
 
     // 2. Mark previous in-progress for this doctor as completed
     const prevInProgress = patients.find((p) => p.doctorId === target.doctorId && p.status === 'IN_PROGRESS');
     if (prevInProgress) {
-      await supabase
+      supabase
+        .from('queue_entries')
+        .update({ status: 'COMPLETED', updated_at: new Date().toISOString() })
+        .eq('id', prevInProgress.appointmentId || prevInProgress.id)
+        .then(() => {});
+
+      supabase
         .from('appointments')
-        .update({
-          status: 'completed',
-          completed_at: new Date().toISOString(),
-        })
-        .eq('id', prevInProgress.appointmentId || prevInProgress.id);
+        .update({ status: 'completed', completed_at: new Date().toISOString() })
+        .eq('id', prevInProgress.appointmentId || prevInProgress.id)
+        .then(() => {});
     }
 
-    // 3. Fastify consultation start
+    // 3. Fastify backend consultation start
     fetch(`${API_BASE}/api/v1/consultations/${target.id}/start`, { method: 'POST' }).catch(() => {});
 
     setPatients((prev) => {
@@ -463,32 +511,32 @@ export const QueueProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     // 1. Complete current appointment in Supabase
     if (inProgressPatient) {
-      const { error: compError } = await supabase
+      supabase
+        .from('queue_entries')
+        .update({ status: 'COMPLETED', updated_at: new Date().toISOString() })
+        .eq('id', inProgressPatient.appointmentId || inProgressPatient.id)
+        .then(() => {});
+
+      supabase
         .from('appointments')
-        .update({
-          status: 'completed',
-          completed_at: new Date().toISOString(),
+        .update({ status: 'completed', completed_at: new Date().toISOString() })
+        .eq('id', inProgressPatient.appointmentId || inProgressPatient.id)
+        .then(() => {});
+
+      supabase
+        .from('consultations')
+        .insert({
+          queue_entry_id: inProgressPatient.appointmentId || inProgressPatient.id,
+          started_at: new Date(Date.now() - 600000).toISOString(),
+          ended_at: new Date().toISOString(),
+          duration_seconds: 600,
         })
-        .eq('id', inProgressPatient.appointmentId || inProgressPatient.id);
-
-      if (compError) console.error('Supabase complete appointment error:', compError);
-
-      // 2. Record consultation in Supabase 'consultations' table
-      await supabase.from('consultations').insert([
-        {
-          appointment_id: inProgressPatient.appointmentId || inProgressPatient.id,
-          patient_id: inProgressPatient.patientId || inProgressPatient.id,
-          doctor_id: doctorId,
-          started_at: inProgressPatient.checkInTime,
-          completed_at: new Date().toISOString(),
-          status: 'COMPLETED',
-        },
-      ]);
+        .then(() => {});
 
       fetch(`${API_BASE}/api/v1/consultations/${inProgressPatient.id}/end`, { method: 'POST' }).catch(() => {});
     }
 
-    // 3. Find next waiting patient for this doctor ordered by priority: EMERGENCY -> URGENT -> ROUTINE
+    // 2. Find next waiting patient for this doctor ordered by priority: EMERGENCY -> URGENT -> ROUTINE
     const waitingList = patients
       .filter((p) => p.doctorId === doctorId && p.status === 'WAITING')
       .sort((a, b) => {
@@ -500,16 +548,17 @@ export const QueueProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const nextPatient = waitingList.length > 0 ? waitingList[0] : null;
 
     if (nextPatient) {
-      const { error: nextError } = await supabase
-        .from('appointments')
-        .update({
-          status: 'in_consultation',
-          called_at: new Date().toISOString(),
-          consultation_started_at: new Date().toISOString(),
-        })
-        .eq('id', nextPatient.appointmentId || nextPatient.id);
+      supabase
+        .from('queue_entries')
+        .update({ status: 'IN_PROGRESS', updated_at: new Date().toISOString() })
+        .eq('id', nextPatient.appointmentId || nextPatient.id)
+        .then(() => {});
 
-      if (nextError) console.error('Supabase next patient call error:', nextError);
+      supabase
+        .from('appointments')
+        .update({ status: 'in_consultation', called_at: new Date().toISOString() })
+        .eq('id', nextPatient.appointmentId || nextPatient.id)
+        .then(() => {});
 
       fetch(`${API_BASE}/api/v1/consultations/${nextPatient.id}/start`, { method: 'POST' }).catch(() => {});
     }
@@ -536,14 +585,19 @@ export const QueueProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   // NO-SHOW button in Supabase
   const markNoShow = async (patientId: number) => {
-    const target = patients.find((p) => p.id === patientId || p.appointmentId === patientId);
+    const target = patients.find((p) => p.id === patientId || p.appointmentId === patientId || p.patientId === patientId);
     if (target) {
-      const { error } = await supabase
+      supabase
+        .from('queue_entries')
+        .update({ status: 'NO_SHOW', updated_at: new Date().toISOString() })
+        .eq('id', target.appointmentId || target.id)
+        .then(() => {});
+
+      supabase
         .from('appointments')
         .update({ status: 'no_show' })
-        .eq('id', target.appointmentId || target.id);
-
-      if (error) console.error('Supabase no-show update error:', error);
+        .eq('id', target.appointmentId || target.id)
+        .then(() => {});
 
       fetch(`${API_BASE}/api/v1/queue/${patientId}/no-show`, {
         method: 'POST',
@@ -554,7 +608,7 @@ export const QueueProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     setPatients((prev) => {
       const updated = prev.map((p) => {
-        if (p.id === patientId || p.appointmentId === patientId) {
+        if (p.id === patientId || p.appointmentId === patientId || p.patientId === patientId) {
           return { ...p, status: 'NO_SHOW' as const, position: -1, etaMinutes: 0 };
         }
         return p;
