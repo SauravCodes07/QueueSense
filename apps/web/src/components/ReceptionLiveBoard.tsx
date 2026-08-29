@@ -2,16 +2,13 @@ import React, { useState } from 'react';
 import {
   LayoutDashboard,
   ArrowRightLeft,
-  RefreshCw,
-  Sparkles,
-  Users,
-  Clock,
-  CheckCircle2,
-  AlertTriangle,
   X,
+  PhoneCall,
+  UserX,
 } from 'lucide-react';
 import { useNotifications } from '../context/NotificationContext';
 import { useQueue, DoctorMeta, AppPatient } from '../context/QueueContext';
+import { useLanguage } from '../context/LanguageContext';
 
 interface ReceptionLiveBoardProps {
   lastEventTime?: number;
@@ -20,6 +17,7 @@ interface ReceptionLiveBoardProps {
 export const ReceptionLiveBoard: React.FC<ReceptionLiveBoardProps> = () => {
   const { addNotification } = useNotifications();
   const { doctors, patients, callPatient, markNoShow } = useQueue();
+  const { t, translateDepartment, translatePriority } = useLanguage();
 
   const [selectedDept, setSelectedDept] = useState<string>('All');
   const [transferSourcePatient, setTransferSourcePatient] = useState<AppPatient | null>(null);
@@ -66,10 +64,10 @@ export const ReceptionLiveBoard: React.FC<ReceptionLiveBoardProps> = () => {
         <div>
           <h2 className="text-lg font-display font-bold text-slate-900 dark:text-white flex items-center space-x-2">
             <LayoutDashboard className="w-5 h-5 text-teal-600 dark:text-teal-400" />
-            <span>Cross-Doctor Live Operations Board</span>
+            <span>{t('live.title')}</span>
           </h2>
           <p className="text-xs text-slate-500 dark:text-slate-400">
-            Real-time outpatient density, live clinician queues, and staff-authorized transfers
+            {t('live.subtitle')}
           </p>
         </div>
 
@@ -79,130 +77,142 @@ export const ReceptionLiveBoard: React.FC<ReceptionLiveBoardProps> = () => {
             <button
               key={dept}
               onClick={() => setSelectedDept(dept)}
-              className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
+              className={`px-3 py-1.5 rounded-lg font-semibold transition-all ${
                 selectedDept === dept
-                  ? 'bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-300 shadow-sm font-bold'
+                  ? 'bg-white dark:bg-slate-900 text-teal-600 dark:text-teal-400 shadow-sm'
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
-              {dept === 'All' ? 'All Clinics' : dept}
+              {dept === 'All' ? t('common.all_clinics') : translateDepartment(dept)}
             </button>
           ))}
         </div>
       </div>
 
-      {/* ── Doctor Queue Columns Grid ────────────────────────────────── */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      {/* ── Multi-Doctor Live Board Grid ─────────────────────────────── */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
         {filteredDoctors.map((doc) => {
-          const docWaiting = patients.filter((p) => p.doctorId === doc.id && p.status === 'WAITING');
-          const docInProgress = patients.find((p) => p.doctorId === doc.id && p.status === 'IN_PROGRESS');
+          const docPatients = patients.filter((p) => p.doctorId === doc.id && p.status === 'WAITING');
+          const docActive = patients.find((p) => p.doctorId === doc.id && p.status === 'IN_PROGRESS');
 
           return (
             <div
               key={doc.id}
-              className="clinical-card bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 overflow-hidden flex flex-col justify-between shadow-subtle hover:border-teal-500/40 transition-all"
+              className="clinical-card bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 flex flex-col justify-between overflow-hidden shadow-subtle"
             >
-              {/* Card Header */}
-              <div>
-                <div className="p-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 flex items-center justify-between">
-                  <div>
-                    <h3 className="font-bold text-slate-900 dark:text-white text-xs">
+              {/* Doctor Header Banner */}
+              <div className="p-4 border-b border-slate-100 dark:border-slate-800/80 flex items-start justify-between">
+                <div>
+                  <div className="flex items-center space-x-2">
+                    <h3 className="font-display font-bold text-sm text-slate-900 dark:text-white">
                       {doc.name}
                     </h3>
-                    <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                      {doc.department} • {doc.room}
-                    </p>
-                  </div>
-                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-teal-50 dark:bg-teal-950/60 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800">
-                    {docWaiting.length} In Line
-                  </span>
-                </div>
-
-                {/* Active in room */}
-                <div className="p-3 bg-emerald-50/40 dark:bg-emerald-950/20 border-b border-emerald-100 dark:border-emerald-900/30 flex items-center justify-between text-xs">
-                  <div className="flex items-center space-x-2">
-                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                    <span className="text-[11px] font-semibold text-emerald-800 dark:text-emerald-200">
-                      {docInProgress ? `In Room: ${docInProgress.token} (${docInProgress.name})` : 'Room Available'}
+                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+                      {doc.room}
                     </span>
                   </div>
-                  {docInProgress && (
-                    <span className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400">
-                      Live
-                    </span>
-                  )}
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                    {translateDepartment(doc.department)} • Pace: {doc.targetPace} {t('common.min')}
+                  </p>
                 </div>
+                <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-teal-50 dark:bg-teal-950/60 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800">
+                  {docPatients.length} {t('live.in_line')}
+                </span>
+              </div>
 
-                {/* Waiting Patients List */}
-                <div className="p-3 divide-y divide-slate-100 dark:divide-slate-800/60 max-h-72 overflow-y-auto space-y-1">
-                  {docWaiting.length > 0 ? (
-                    docWaiting.map((p) => (
-                      <div key={p.id} className="pt-2 pb-1 flex items-center justify-between text-xs group">
-                        <div className="min-w-0 pr-2">
+              {/* Currently Serving Patient in Room */}
+              <div className="p-4 bg-slate-50/70 dark:bg-slate-800/40 border-b border-slate-100 dark:border-slate-800/80 text-xs">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                  ● {t('doctor.in_room')}
+                </span>
+                {docActive ? (
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="font-mono font-bold text-slate-900 dark:text-white">
+                        {docActive.token}
+                      </span>
+                      <p className="font-semibold text-slate-800 dark:text-slate-200">{docActive.name}</p>
+                    </div>
+                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200">
+                      In Consultation
+                    </span>
+                  </div>
+                ) : (
+                  <p className="text-slate-400 italic">{t('doctor.room_empty')}</p>
+                )}
+              </div>
+
+              {/* Waiting Queue List for this Doctor */}
+              <div className="p-4 flex-1 space-y-2 max-h-72 overflow-y-auto">
+                {docPatients.length > 0 ? (
+                  docPatients.map((p, idx) => (
+                    <div
+                      key={p.id}
+                      className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-750 flex items-center justify-between text-xs hover:border-teal-500/40 transition-colors"
+                    >
+                      <div className="flex items-center space-x-2.5 min-w-0">
+                        <span className="w-5 h-5 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 font-bold text-[10px] flex items-center justify-center flex-shrink-0">
+                          #{idx + 1}
+                        </span>
+                        <div className="min-w-0">
                           <div className="flex items-center space-x-1.5">
-                            <span className="font-mono font-bold text-slate-900 dark:text-white text-xs">
+                            <span className="font-mono font-bold text-slate-900 dark:text-white">
                               {p.token}
                             </span>
                             <span
                               className={`px-1.5 py-0.2 rounded text-[9px] font-bold ${
                                 p.priority === 'EMERGENCY'
-                                  ? 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300'
+                                  ? 'bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300'
                                   : p.priority === 'URGENT'
-                                  ? 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300'
-                                  : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
+                                  ? 'bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300'
+                                  : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
                               }`}
                             >
-                              {p.priority}
+                              {translatePriority(p.priority)}
                             </span>
                           </div>
-                          <p className="text-[11px] text-slate-600 dark:text-slate-300 truncate">
-                            {p.name}
-                          </p>
-                          <span className="text-[10px] text-slate-400">
-                            #{p.position} • Est. Wait: {p.etaMinutes} min
-                          </span>
-                        </div>
-
-                        <div className="flex items-center space-x-1 flex-shrink-0">
-                          <button
-                            onClick={() => callPatient(p.id)}
-                            className="px-2 py-1 rounded-lg bg-teal-50 dark:bg-teal-950/60 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800 hover:bg-teal-100 text-[10px] font-semibold transition-colors"
-                          >
-                            Call
-                          </button>
-                          <button
-                            onClick={() => handleOpenTransfer(p)}
-                            className="p-1 rounded-lg text-slate-400 hover:text-teal-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-                            title="Transfer Patient"
-                          >
-                            <ArrowRightLeft className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={() => markNoShow(p.id)}
-                            className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-[10px]"
-                            title="Mark No-Show"
-                          >
-                            <X className="w-3.5 h-3.5" />
-                          </button>
+                          <p className="font-semibold text-slate-800 dark:text-slate-200 truncate">{p.name}</p>
                         </div>
                       </div>
-                    ))
-                  ) : (
-                    <div className="py-6 text-center text-slate-400 text-xs">
-                      No patients waiting in queue.
+
+                      <div className="flex items-center space-x-1.5 flex-shrink-0">
+                        <span className="text-[11px] font-semibold text-teal-600 dark:text-teal-400">
+                          {p.etaMinutes} {t('common.min')}
+                        </span>
+                        <button
+                          onClick={() => handleOpenTransfer(p)}
+                          title="Transfer to another doctor"
+                          className="p-1 rounded-lg bg-slate-100 dark:bg-slate-700 hover:text-teal-600 text-slate-500 transition-colors"
+                        >
+                          <ArrowRightLeft className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => {
+                            callPatient(p.id);
+                            addNotification('Patient Called', `Called ${p.token} to ${doc.room}`, 'info');
+                          }}
+                          className="px-2 py-0.5 rounded-lg bg-teal-600 hover:bg-teal-500 text-white text-[10px] font-semibold"
+                        >
+                          {t('doctor.call_btn')}
+                        </button>
+                      </div>
                     </div>
-                  )}
-                </div>
+                  ))
+                ) : (
+                  <p className="text-xs text-slate-400 text-center py-6">
+                    {t('doctor.no_waiting')}
+                  </p>
+                )}
               </div>
             </div>
           );
         })}
       </div>
 
-      {/* ── Patient Transfer Modal ────────────────────────────────────── */}
+      {/* ── Transfer Patient Modal ────────────────────────────────────── */}
       {transferSourcePatient && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-150"
           onClick={() => setTransferSourcePatient(null)}
         >
           <div
@@ -213,30 +223,27 @@ export const ReceptionLiveBoard: React.FC<ReceptionLiveBoardProps> = () => {
               <div className="flex items-center space-x-2">
                 <ArrowRightLeft className="w-5 h-5 text-teal-600" />
                 <h3 className="font-display font-bold text-base text-slate-900 dark:text-white">
-                  Transfer Patient
+                  {t('live.transfer_patient')}
                 </h3>
               </div>
-              <button
-                onClick={() => setTransferSourcePatient(null)}
-                className="p-1 text-slate-400 hover:text-slate-600"
-              >
+              <button onClick={() => setTransferSourcePatient(null)} className="p-1 text-slate-400 hover:text-slate-600">
                 <X className="w-4 h-4" />
               </button>
             </div>
 
             <form onSubmit={handleExecuteTransfer} className="space-y-3.5 text-xs">
-              <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+              <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-700">
                 <p className="font-bold text-slate-900 dark:text-white">
-                  {transferSourcePatient.token} — {transferSourcePatient.name}
+                  {transferSourcePatient.token} • {transferSourcePatient.name}
                 </p>
-                <p className="text-[11px] text-slate-400">
-                  Current: {transferSourcePatient.doctorName} ({transferSourcePatient.department})
+                <p className="text-slate-500 mt-0.5">
+                  Currently assigned to: <b>{transferSourcePatient.doctorName}</b> ({translateDepartment(transferSourcePatient.department)})
                 </p>
               </div>
 
               <div>
                 <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                  Reassign to Specialist:
+                  {t('live.reassign_specialist')}
                 </label>
                 <select
                   value={targetDoctorId || ''}
@@ -247,7 +254,7 @@ export const ReceptionLiveBoard: React.FC<ReceptionLiveBoardProps> = () => {
                     .filter((d) => d.id !== transferSourcePatient.doctorId)
                     .map((d) => (
                       <option key={d.id} value={d.id}>
-                        {d.name} ({d.department} • {d.room})
+                        {d.name} ({translateDepartment(d.department)} • {d.room})
                       </option>
                     ))}
                 </select>
@@ -255,30 +262,29 @@ export const ReceptionLiveBoard: React.FC<ReceptionLiveBoardProps> = () => {
 
               <div>
                 <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                  Clinical Transfer Justification:
+                  {t('live.transfer_reason')}
                 </label>
-                <input
-                  type="text"
-                  required
+                <textarea
+                  rows={2}
                   value={transferReason}
                   onChange={(e) => setTransferReason(e.target.value)}
-                  className="w-full px-3.5 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none"
+                  className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none"
                 />
               </div>
 
-              <div className="pt-3 flex justify-end space-x-2">
+              <div className="pt-2 flex justify-end space-x-2">
                 <button
                   type="button"
                   onClick={() => setTransferSourcePatient(null)}
                   className="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-semibold"
                 >
-                  Cancel
+                  {t('common.cancel')}
                 </button>
                 <button
                   type="submit"
                   className="px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-semibold shadow-sm"
                 >
-                  Authorize Transfer
+                  {t('live.authorize_transfer')}
                 </button>
               </div>
             </form>

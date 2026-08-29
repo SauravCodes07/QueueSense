@@ -141,12 +141,10 @@ export const QueueProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     isFetchingRef.current = true;
     try {
       // 1. Fetch doctors from Supabase
-      const { data: doctorsData, error: docError } = await supabase
-        .from('doctors')
-        .select('*');
+      const { data: doctorsData } = await supabase.from('doctors').select('*');
 
       let activeDocs = DEFAULT_DOCTORS;
-      if (!docError && doctorsData && doctorsData.length > 0) {
+      if (doctorsData && doctorsData.length > 0) {
         activeDocs = doctorsData.map((d: any) => ({
           id: d.id,
           name: d.name,
@@ -159,17 +157,22 @@ export const QueueProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         setDoctors(activeDocs);
       }
 
-      // 2. Fetch appointments joined with patients
+      // 2. Fetch all appointments and patients from Supabase
+      const [appRes, patRes] = await Promise.all([
+        supabase.from('appointments').select('*').order('created_at', { ascending: true }),
+        supabase.from('patients').select('*').order('created_at', { ascending: true }),
+      ]);
+
+      const appointmentsData = appRes.data || [];
+      const patientsData = patRes.data || [];
+
       let mappedPatients: AppPatient[] = [];
 
-      const { data: appointmentsData, error: appError } = await supabase
-        .from('appointments')
-        .select('*, patient:patients(*)')
-        .order('created_at', { ascending: true });
-
-      if (!appError && appointmentsData && appointmentsData.length > 0) {
+      if (appointmentsData.length > 0) {
         mappedPatients = appointmentsData.map((row: any) => {
           const doc = activeDocs.find((d) => d.id === row.doctor_id) || activeDocs[0];
+          const matchedPatient = patientsData.find((p: any) => p.id === row.patient_id || p.token === row.token);
+
           const rawStatus = (row.status || 'WAITING').toUpperCase();
           const status =
             rawStatus === 'IN_CONSULTATION' || rawStatus === 'IN_PROGRESS' ? 'IN_PROGRESS' :
@@ -177,14 +180,14 @@ export const QueueProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             rawStatus === 'NO_SHOW' ? 'NO_SHOW' : 'WAITING';
 
           const priority = (row.priority || 'ROUTINE').toUpperCase() as AppPatient['priority'];
-          const patientName = row.patient?.name || row.patient_name || row.name || `Patient ${row.token || row.id}`;
-          const patientPhone = row.patient?.phone || row.patient?.contact || row.contact || row.phone || '+91 98000 00000';
+          const patientName = row.patient_name || matchedPatient?.name || row.name || `Patient ${row.token || row.id}`;
+          const patientPhone = row.contact || row.phone || matchedPatient?.phone || matchedPatient?.contact || '+91 98000 00000';
 
           return {
             id: row.id,
-            patientId: row.patient_id,
+            patientId: row.patient_id || matchedPatient?.id,
             appointmentId: row.id,
-            token: row.token || row.patient?.token || `P-${row.id}`,
+            token: row.token || matchedPatient?.token || `P-${row.id}`,
             name: patientName,
             phone: patientPhone,
             department: row.department || doc.department,
@@ -200,6 +203,31 @@ export const QueueProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             etaMinutes: row.estimated_wait || 12,
             expectedTime: new Date(Date.now() + 15 * 60000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
             completedAt: row.completed_at ? new Date(row.completed_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : undefined,
+          };
+        });
+      } else if (patientsData.length > 0) {
+        // If patients table has rows without appointments table entries
+        mappedPatients = patientsData.map((p: any, idx: number) => {
+          const doc = activeDocs[0];
+          return {
+            id: p.id,
+            patientId: p.id,
+            appointmentId: p.id,
+            token: p.token || `P-${p.id}`,
+            name: p.name,
+            phone: p.phone || p.contact || '+91 98000 00000',
+            department: doc.department,
+            departmentId: doc.departmentId,
+            doctorId: doc.id,
+            doctorName: doc.name,
+            doctorRoom: doc.room,
+            priority: 'ROUTINE',
+            status: 'WAITING',
+            position: idx + 1,
+            checkInTime: p.created_at ? new Date(p.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '10:00 AM',
+            createdAt: p.created_at ? new Date(p.created_at).getTime() : Date.now(),
+            etaMinutes: (idx + 1) * 12,
+            expectedTime: new Date(Date.now() + 15 * 60000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           };
         });
       }
@@ -218,11 +246,11 @@ export const QueueProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     fetchAllData();
 
     const channel = supabase
-      .channel('queuesense-realtime-sync')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'appointments' }, () => {
+      .channel('queuesense-realtime-master-sync')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'patients' }, () => {
         fetchAllData();
       })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'patients' }, () => {
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'appointments' }, () => {
         fetchAllData();
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'doctors' }, () => {
@@ -265,62 +293,79 @@ export const QueueProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     let appointmentDbId: any = null;
 
     // 1. Insert into Supabase 'patients' table
-    const { data: pInsert, error: pError } = await supabase
-      .from('patients')
-      .insert([
-        {
-          name: data.name.trim(),
-          token,
-          phone: data.phone?.trim() || '+91 98000 00000',
-        },
-      ])
-      .select()
-      .single();
+    try {
+      const { data: pInsert, error: pError } = await supabase
+        .from('patients')
+        .insert([
+          {
+            name: data.name.trim(),
+            token,
+            phone: data.phone?.trim() || '+91 98000 00000',
+          },
+        ])
+        .select()
+        .single();
 
-    if (pError) {
-      console.error('Supabase patients insert error:', pError);
-    } else if (pInsert) {
-      patientDbId = pInsert.id;
+      if (pError) {
+        console.warn('Patients table insert note:', pError);
+        // Try fallback with contact column
+        const retryP = await supabase
+          .from('patients')
+          .insert([{ name: data.name.trim(), token, contact: data.phone?.trim() || '+91 98000 00000' }])
+          .select()
+          .single();
+        if (retryP.data) patientDbId = retryP.data.id;
+      } else if (pInsert) {
+        patientDbId = pInsert.id;
+      }
+    } catch (err) {
+      console.warn('Supabase patients insert exception:', err);
     }
 
     // 2. Insert into Supabase 'appointments' table
-    const { data: aInsert, error: aError } = await supabase
-      .from('appointments')
-      .insert([
-        {
-          patient_id: patientDbId || undefined,
-          patient_name: data.name.trim(),
-          token,
-          contact: data.phone?.trim() || '+91 98000 00000',
-          department: doc.department,
-          department_id: doc.departmentId,
-          doctor_id: doc.id,
-          doctor_name: doc.name,
-          priority,
-          status: 'waiting',
-          arrival_time: checkInTime,
-          appointment_date: new Date().toISOString().split('T')[0],
-        },
-      ])
-      .select()
-      .single();
+    try {
+      const { data: aInsert, error: aError } = await supabase
+        .from('appointments')
+        .insert([
+          {
+            patient_id: patientDbId || undefined,
+            patient_name: data.name.trim(),
+            token,
+            contact: data.phone?.trim() || '+91 98000 00000',
+            department: doc.department,
+            department_id: doc.departmentId,
+            doctor_id: doc.id,
+            doctor_name: doc.name,
+            priority,
+            status: 'waiting',
+            arrival_time: checkInTime,
+            appointment_date: new Date().toISOString().split('T')[0],
+          },
+        ])
+        .select()
+        .single();
 
-    if (aError) {
-      console.error('Supabase appointments insert error:', aError);
-    } else if (aInsert) {
-      appointmentDbId = aInsert.id;
+      if (aError) {
+        console.warn('Appointments table insert note:', aError);
+      } else if (aInsert) {
+        appointmentDbId = aInsert.id;
+      }
+    } catch (err) {
+      console.warn('Supabase appointments insert exception:', err);
     }
 
-    // 3. Insert into Supabase 'notifications' table
-    await supabase.from('notifications').insert([
-      {
-        title: 'Patient Registered',
-        message: `Token ${token} assigned to ${data.name} for ${doc.name} (${doc.department})`,
-        type: 'success',
-      },
-    ]);
+    // 3. Broadcast notification in Supabase notifications table
+    try {
+      await supabase.from('notifications').insert([
+        {
+          title: 'Patient Enrolled',
+          message: `Token ${token} assigned to ${data.name} for ${doc.name} (${doc.department})`,
+          type: 'success',
+        },
+      ]);
+    } catch {}
 
-    // 4. Also notify Fastify backend API
+    // 4. Also call backend API to sync PostgreSQL if running
     fetch(`${API_BASE}/api/v1/patients`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -334,7 +379,7 @@ export const QueueProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }).catch(() => {});
 
     const newPatient: AppPatient = {
-      id: appointmentDbId || Date.now(),
+      id: appointmentDbId || patientDbId || Date.now(),
       patientId: patientDbId || Date.now(),
       appointmentId: appointmentDbId || Date.now(),
       token,

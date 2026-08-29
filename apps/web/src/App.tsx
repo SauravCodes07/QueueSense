@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ThemeProvider } from './context/ThemeContext';
+import { LanguageProvider } from './context/LanguageContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { NotificationProvider, useNotifications } from './context/NotificationContext';
 import { QueueProvider } from './context/QueueContext';
@@ -304,13 +305,15 @@ const MainAppRouter: React.FC = () => {
 export default function App() {
   return (
     <ThemeProvider>
-      <AuthProvider>
-        <NotificationProvider>
-          <QueueProvider>
-            <MainAppRouter />
-          </QueueProvider>
-        </NotificationProvider>
-      </AuthProvider>
+      <LanguageProvider>
+        <AuthProvider>
+          <NotificationProvider>
+            <QueueProvider>
+              <MainAppRouter />
+            </QueueProvider>
+          </NotificationProvider>
+        </AuthProvider>
+      </LanguageProvider>
     </ThemeProvider>
   );
 }

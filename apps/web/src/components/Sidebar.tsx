@@ -12,13 +12,13 @@ import {
   Hospital,
   Zap,
   RefreshCw,
-  ChevronRight,
   LogOut,
 } from 'lucide-react';
 import { NavSection } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { useQueue } from '../context/QueueContext';
 import { useNotifications } from '../context/NotificationContext';
+import { useLanguage } from '../context/LanguageContext';
 
 interface SidebarProps {
   activeSection: NavSection;
@@ -42,24 +42,25 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const { user, signOut } = useAuth();
   const { patients } = useQueue();
   const { unreadCount } = useNotifications();
+  const { t } = useLanguage();
   const [isResetting, setIsResetting] = useState(false);
 
   const totalWaiting = patients.filter((p) => p.status === 'WAITING').length;
 
-  const operationsItems: { id: NavSection; label: string; icon: React.ComponentType<any>; badge?: number; badgeColor?: string }[] = [
-    { id: 'overview', label: 'Overview', icon: LayoutGrid },
-    { id: 'live_queues', label: 'Live Queue', icon: Users, badge: totalWaiting },
-    { id: 'patients', label: 'Patients', icon: User },
-    { id: 'doctors', label: 'Doctors', icon: Stethoscope },
-    { id: 'analytics', label: 'Analytics', icon: BarChart3 },
-    { id: 'notifications', label: 'Notifications', icon: Bell, badge: unreadCount, badgeColor: 'bg-rose-500 text-white' },
-    { id: 'settings', label: 'Settings', icon: Settings },
+  const operationsItems: { id: NavSection; labelKey: string; icon: React.ComponentType<any>; badge?: number; badgeColor?: string }[] = [
+    { id: 'overview', labelKey: 'nav.overview', icon: LayoutGrid },
+    { id: 'live_queues', labelKey: 'nav.live_queues', icon: Users, badge: totalWaiting },
+    { id: 'patients', labelKey: 'nav.patients', icon: User },
+    { id: 'doctors', labelKey: 'nav.doctors', icon: Stethoscope },
+    { id: 'analytics', labelKey: 'nav.analytics', icon: BarChart3 },
+    { id: 'notifications', labelKey: 'nav.notifications', icon: Bell, badge: unreadCount, badgeColor: 'bg-rose-500 text-white' },
+    { id: 'settings', labelKey: 'nav.settings', icon: Settings },
   ];
 
-  const dedicatedViews: { id: NavSection; label: string; sublabel: string; icon: React.ComponentType<any> }[] = [
-    { id: 'patient_portal', label: 'Patient Portal', sublabel: 'Patient View', icon: Smartphone },
-    { id: 'doctor_console', label: 'Doctor Console', sublabel: 'Live Room', icon: Activity },
-    { id: 'admin_overview', label: 'Admin Overview', sublabel: 'Executive', icon: Hospital },
+  const dedicatedViews: { id: NavSection; labelKey: string; sublabelKey: string; icon: React.ComponentType<any> }[] = [
+    { id: 'patient_portal', labelKey: 'nav.patient_portal', sublabelKey: 'portal.mobile_view', icon: Smartphone },
+    { id: 'doctor_console', labelKey: 'nav.doctor_console', sublabelKey: 'doctor.live_session', icon: Activity },
+    { id: 'admin_overview', labelKey: 'nav.admin_overview', sublabelKey: 'overview.matrix_sub', icon: Hospital },
   ];
 
   const handleResetClick = async () => {
@@ -110,7 +111,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 </span>
               </div>
               <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
-                Dynamic Outpatient Velocity
+                {t('landing.tagline')}
               </p>
             </div>
           )}
@@ -123,18 +124,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <div>
           {!isCollapsed && (
             <div className="px-3 pb-2 text-[11px] font-bold tracking-wider text-slate-400 uppercase">
-              OPERATIONS
+              {t('nav.operations')}
             </div>
           )}
           <div className="space-y-1">
             {operationsItems.map((item) => {
               const Icon = item.icon;
               const isActive = activeSection === item.id;
+              const label = t(item.labelKey);
               return (
                 <button
                   key={item.id}
                   onClick={() => onSelectSection(item.id)}
-                  title={isCollapsed ? item.label : undefined}
+                  title={isCollapsed ? label : undefined}
                   className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition-all ${
                     isActive
                       ? 'bg-teal-50 dark:bg-teal-950/50 text-teal-700 dark:text-teal-300 shadow-sm border border-teal-200/60 dark:border-teal-800/60'
@@ -143,7 +145,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 >
                   <div className="flex items-center space-x-3 min-w-0">
                     <Icon className={`w-4 h-4 flex-shrink-0 ${isActive ? 'text-teal-600 dark:text-teal-400' : 'text-slate-400'}`} />
-                    {!isCollapsed && <span className="truncate">{item.label}</span>}
+                    {!isCollapsed && <span className="truncate">{label}</span>}
                   </div>
                   {!isCollapsed && item.badge !== undefined && item.badge > 0 && (
                     <span
@@ -164,18 +166,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <div>
           {!isCollapsed && (
             <div className="px-3 pb-2 text-[11px] font-bold tracking-wider text-slate-400 uppercase">
-              DEDICATED VIEWS
+              {t('nav.dedicated_views')}
             </div>
           )}
           <div className="space-y-1">
             {dedicatedViews.map((item) => {
               const Icon = item.icon;
               const isActive = activeSection === item.id;
+              const label = t(item.labelKey);
               return (
                 <button
                   key={item.id}
                   onClick={() => onSelectSection(item.id)}
-                  title={isCollapsed ? item.label : undefined}
+                  title={isCollapsed ? label : undefined}
                   className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition-all ${
                     isActive
                       ? 'bg-teal-50 dark:bg-teal-950/50 text-teal-700 dark:text-teal-300 shadow-sm border border-teal-200/60 dark:border-teal-800/60'
@@ -184,11 +187,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 >
                   <div className="flex items-center space-x-3 min-w-0">
                     <Icon className={`w-4 h-4 flex-shrink-0 ${isActive ? 'text-teal-600 dark:text-teal-400' : 'text-slate-400'}`} />
-                    {!isCollapsed && <span className="truncate">{item.label}</span>}
+                    {!isCollapsed && <span className="truncate">{label}</span>}
                   </div>
                   {!isCollapsed && (
                     <span className="text-[10px] text-slate-400 dark:text-slate-500 font-normal">
-                      {item.sublabel}
+                      {t(item.sublabelKey)}
                     </span>
                   )}
                 </button>
@@ -197,77 +200,46 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
         </div>
 
-        {/* ⚡ Interactive Demo Engine Card (from Screenshot 1, 3, 4) */}
+        {/* Demo Controls / Reset Button */}
         {!isCollapsed && (
-          <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-750 text-xs space-y-2.5">
-            <div className="flex items-center space-x-2 font-bold text-slate-900 dark:text-slate-200 text-[11px]">
-              <span className="text-amber-500">⚡</span>
-              <span>Interactive Demo Engine</span>
-            </div>
-            <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
-              Test real-time ETA updates by adding emergencies, doctor delays, or completing visits.
-            </p>
+          <div className="pt-2">
             <button
               onClick={handleResetClick}
               disabled={isResetting}
-              className="w-full py-2 px-3 rounded-xl bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-semibold text-xs transition-all shadow-subtle flex items-center justify-center space-x-2 disabled:opacity-50"
+              className="w-full flex items-center justify-center space-x-2 px-3 py-2 rounded-xl text-xs font-medium text-slate-500 dark:text-slate-400 hover:text-teal-600 dark:hover:text-teal-400 hover:bg-slate-100 dark:hover:bg-slate-800/60 border border-slate-200/60 dark:border-slate-800 transition-colors"
             >
-              <RefreshCw className={`w-3.5 h-3.5 text-teal-600 ${isResetting ? 'animate-spin' : ''}`} />
-              <span>Reset Demo State</span>
+              <RefreshCw className={`w-3.5 h-3.5 ${isResetting ? 'animate-spin text-teal-500' : ''}`} />
+              <span>{t('nav.reset_demo')}</span>
             </button>
           </div>
         )}
       </div>
 
-      {/* ── Footer Telemetry & User Card ────────────────────────────── */}
-      <div className="p-3 border-t border-slate-100 dark:border-slate-800/80 space-y-2.5">
-        {!isCollapsed && (
-          <div className="px-2 space-y-0.5">
-            <div className="flex items-center space-x-1.5 text-[11px] font-medium text-emerald-600 dark:text-emerald-400">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span>All systems operational</span>
-            </div>
-            <p className="text-[10px] text-slate-400 dark:text-slate-500">
-              ⚡ Velocity ETA Engine v2.4
-            </p>
-          </div>
-        )}
-
-        <div className="flex items-center justify-between p-2 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-750">
+      {/* ── User Footer ──────────────────────────────────────────────── */}
+      {!isCollapsed && user && (
+        <div className="p-3 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between">
           <div className="flex items-center space-x-2.5 min-w-0">
-            {user?.avatar_url ? (
-              <img
-                src={user.avatar_url}
-                alt={user.name}
-                className="w-8 h-8 rounded-full object-cover border border-teal-500/40 shadow-sm flex-shrink-0"
-              />
+            {user.avatar_url ? (
+              <img src={user.avatar_url} alt={user.name} className="w-8 h-8 rounded-xl object-cover" />
             ) : (
-              <div className="w-8 h-8 rounded-full bg-teal-600 text-white flex items-center justify-center font-bold text-xs flex-shrink-0">
-                {getInitials(user?.name || 'OPD Operations')}
+              <div className="w-8 h-8 rounded-xl bg-teal-600 text-white flex items-center justify-center font-bold text-xs">
+                {getInitials(user.name)}
               </div>
             )}
-            {!isCollapsed && (
-              <div className="min-w-0">
-                <p className="text-xs font-semibold text-slate-900 dark:text-white truncate">
-                  {user?.name || 'OPD Operations'}
-                </p>
-                <p className="text-[10px] text-slate-400 truncate">
-                  {user?.role === 'DOCTOR' ? 'Doctor / Clinician' : user?.role === 'PATIENT' ? 'Patient Portal' : 'Desk Lead • Admin'}
-                </p>
-              </div>
-            )}
+            <div className="min-w-0">
+              <p className="text-xs font-bold text-slate-900 dark:text-white truncate">{user.name}</p>
+              <p className="text-[10px] text-slate-400 truncate">{user.email}</p>
+            </div>
           </div>
-          {!isCollapsed && (
-            <button
-              onClick={signOut}
-              title="Sign Out"
-              className="p-1.5 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 rounded-lg transition-colors"
-            >
-              <LogOut className="w-3.5 h-3.5" />
-            </button>
-          )}
+          <button
+            onClick={() => signOut()}
+            title={t('landing.signout')}
+            className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+          >
+            <LogOut className="w-4 h-4" />
+          </button>
         </div>
-      </div>
+      )}
     </aside>
   );
 };

@@ -3,20 +3,16 @@ import {
   Users,
   Search,
   UserPlus,
-  Plus,
-  CheckCircle2,
-  Clock,
-  ChevronRight,
-  Filter,
   X,
-  RefreshCw,
 } from 'lucide-react';
 import { useNotifications } from '../context/NotificationContext';
 import { useQueue } from '../context/QueueContext';
+import { useLanguage } from '../context/LanguageContext';
 
 export const PatientsPage: React.FC = () => {
   const { addNotification } = useNotifications();
   const { patients, doctors, registerPatient } = useQueue();
+  const { t, translateStatus, translatePriority, translateDepartment } = useLanguage();
 
   const [search, setSearch] = useState('');
   const [filterDept, setFilterDept] = useState('All');
@@ -55,7 +51,7 @@ export const PatientsPage: React.FC = () => {
       setNewPhone('');
       addNotification(
         'Patient Registered & Queued',
-        `Token ${created.token} assigned to ${created.name} (Assigned to ${created.doctorName} in ${created.department}).`,
+        `Token ${created.token} assigned to ${created.name} (${created.doctorName} - ${created.department}).`,
         'success'
       );
     } catch (err) {
@@ -81,10 +77,10 @@ export const PatientsPage: React.FC = () => {
       <div className="clinical-card p-5 bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-lg font-display font-bold text-slate-900 dark:text-white">
-            Patients Roster & Enrollment
+            {t('patients.title')}
           </h1>
           <p className="text-xs text-slate-500 dark:text-slate-400">
-            Outpatient directory, token allocations, and real-time clinical assignments
+            {t('patients.subtitle')}
           </p>
         </div>
 
@@ -93,7 +89,7 @@ export const PatientsPage: React.FC = () => {
           className="px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-semibold text-xs shadow-sm transition-all flex items-center space-x-1.5"
         >
           <UserPlus className="w-3.5 h-3.5" />
-          <span>Register Walk-In Patient</span>
+          <span>{t('patients.register_button')}</span>
         </button>
       </div>
 
@@ -105,24 +101,24 @@ export const PatientsPage: React.FC = () => {
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search patient name, token, doctor, or phone..."
+            placeholder={t('patients.search_placeholder')}
             className="w-full pl-9 pr-4 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500 shadow-subtle"
           />
         </div>
 
         <div className="flex items-center space-x-2 text-xs">
-          <span className="text-slate-400 font-medium">Department:</span>
+          <span className="text-slate-400 font-medium">{t('common.department')}:</span>
           <select
             value={filterDept}
             onChange={(e) => setFilterDept(e.target.value)}
             className="px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-semibold text-slate-800 dark:text-slate-200 focus:outline-none shadow-subtle"
           >
-            <option value="All">All Clinics</option>
-            <option value="General Medicine">General Medicine</option>
-            <option value="Pediatrics">Pediatrics</option>
-            <option value="Cardiology">Cardiology</option>
-            <option value="Orthopedics">Orthopedics</option>
-            <option value="Dermatology">Dermatology</option>
+            <option value="All">{t('common.all_clinics')}</option>
+            <option value="General Medicine">{translateDepartment('General Medicine')}</option>
+            <option value="Pediatrics">{translateDepartment('Pediatrics')}</option>
+            <option value="Cardiology">{translateDepartment('Cardiology')}</option>
+            <option value="Orthopedics">{translateDepartment('Orthopedics')}</option>
+            <option value="Dermatology">{translateDepartment('Dermatology')}</option>
           </select>
         </div>
       </div>
@@ -133,14 +129,14 @@ export const PatientsPage: React.FC = () => {
           <table className="w-full text-left text-xs">
             <thead>
               <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                <th className="py-3 px-5">TOKEN</th>
-                <th className="py-3 px-4">PATIENT NAME</th>
-                <th className="py-3 px-4">PHONE</th>
-                <th className="py-3 px-4">CLINIC / DEPT</th>
-                <th className="py-3 px-4">ASSIGNED DOCTOR</th>
-                <th className="py-3 px-4">STATUS</th>
-                <th className="py-3 px-4">PRIORITY</th>
-                <th className="py-3 px-5">CHECK-IN</th>
+                <th className="py-3 px-5">{t('patients.token_col')}</th>
+                <th className="py-3 px-4">{t('patients.name_col')}</th>
+                <th className="py-3 px-4">{t('patients.phone_col')}</th>
+                <th className="py-3 px-4">{t('patients.dept_col')}</th>
+                <th className="py-3 px-4">{t('patients.doctor_col')}</th>
+                <th className="py-3 px-4">{t('patients.status_col')}</th>
+                <th className="py-3 px-4">{t('patients.priority_col')}</th>
+                <th className="py-3 px-5">{t('patients.checkin_col')}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
@@ -149,7 +145,7 @@ export const PatientsPage: React.FC = () => {
                   <td className="py-3.5 px-5 font-mono font-bold text-slate-900 dark:text-white">{p.token}</td>
                   <td className="py-3.5 px-4 font-semibold text-slate-800 dark:text-slate-200">{p.name}</td>
                   <td className="py-3.5 px-4 text-slate-500 font-mono text-[11px]">{p.phone}</td>
-                  <td className="py-3.5 px-4 text-slate-700 dark:text-slate-300 font-medium">{p.department}</td>
+                  <td className="py-3.5 px-4 text-slate-700 dark:text-slate-300 font-medium">{translateDepartment(p.department)}</td>
                   <td className="py-3.5 px-4 text-slate-600 dark:text-slate-400 font-medium">{p.doctorName}</td>
                   <td className="py-3.5 px-4">
                     <span
@@ -163,7 +159,7 @@ export const PatientsPage: React.FC = () => {
                           : 'bg-teal-50 dark:bg-teal-950/60 text-teal-700 dark:text-teal-300 border border-teal-200'
                       }`}
                     >
-                      {p.status === 'IN_PROGRESS' ? '● In Consultation' : p.status === 'WAITING' ? '● Waiting in Queue' : p.status === 'NO_SHOW' ? '● No-Show' : 'Completed'}
+                      ● {translateStatus(p.status)}
                     </span>
                   </td>
                   <td className="py-3.5 px-4">
@@ -176,7 +172,7 @@ export const PatientsPage: React.FC = () => {
                           : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
                       }`}
                     >
-                      {p.priority}
+                      {translatePriority(p.priority)}
                     </span>
                   </td>
                   <td className="py-3.5 px-5 text-slate-500">{p.checkInTime}</td>
@@ -201,7 +197,7 @@ export const PatientsPage: React.FC = () => {
               <div className="flex items-center space-x-2">
                 <UserPlus className="w-5 h-5 text-teal-600" />
                 <h3 className="font-display font-bold text-base text-slate-900 dark:text-white">
-                  Register Walk-In Patient
+                  {t('patients.modal_title')}
                 </h3>
               </div>
               <button
@@ -215,7 +211,7 @@ export const PatientsPage: React.FC = () => {
             <form onSubmit={handleRegister} className="space-y-3.5 text-xs">
               <div>
                 <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                  Patient Full Name *
+                  {t('patients.name_label')}
                 </label>
                 <input
                   type="text"
@@ -229,7 +225,7 @@ export const PatientsPage: React.FC = () => {
 
               <div>
                 <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                  Contact Phone
+                  {t('patients.phone_label')}
                 </label>
                 <input
                   type="text"
@@ -243,24 +239,24 @@ export const PatientsPage: React.FC = () => {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                    Department *
+                    {t('patients.dept_label')}
                   </label>
                   <select
                     value={newDept}
                     onChange={(e) => handleDeptChange(e.target.value)}
                     className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none"
                   >
-                    <option value="General Medicine">General Medicine</option>
-                    <option value="Pediatrics">Pediatrics</option>
-                    <option value="Cardiology">Cardiology</option>
-                    <option value="Orthopedics">Orthopedics</option>
-                    <option value="Dermatology">Dermatology</option>
+                    <option value="General Medicine">{translateDepartment('General Medicine')}</option>
+                    <option value="Pediatrics">{translateDepartment('Pediatrics')}</option>
+                    <option value="Cardiology">{translateDepartment('Cardiology')}</option>
+                    <option value="Orthopedics">{translateDepartment('Orthopedics')}</option>
+                    <option value="Dermatology">{translateDepartment('Dermatology')}</option>
                   </select>
                 </div>
 
                 <div>
                   <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                    Assigned Doctor *
+                    {t('patients.doctor_label')}
                   </label>
                   <select
                     value={newDoctorId}
@@ -280,16 +276,16 @@ export const PatientsPage: React.FC = () => {
 
               <div>
                 <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                  Triage Priority Tier
+                  {t('patients.priority_label')}
                 </label>
                 <select
                   value={newPriority}
                   onChange={(e) => setNewPriority(e.target.value as any)}
                   className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none"
                 >
-                  <option value="ROUTINE">Routine (Standard Queue)</option>
-                  <option value="URGENT">Urgent (Priority Intake)</option>
-                  <option value="EMERGENCY">Emergency (Immediate Escalation)</option>
+                  <option value="ROUTINE">{translatePriority('ROUTINE')}</option>
+                  <option value="URGENT">{translatePriority('URGENT')}</option>
+                  <option value="EMERGENCY">{translatePriority('EMERGENCY')}</option>
                 </select>
               </div>
 
@@ -299,14 +295,14 @@ export const PatientsPage: React.FC = () => {
                   onClick={() => setIsRegisterModalOpen(false)}
                   className="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-semibold"
                 >
-                  Cancel
+                  {t('common.cancel')}
                 </button>
                 <button
                   type="submit"
                   disabled={isSubmitting}
                   className="px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-semibold shadow-sm disabled:opacity-50"
                 >
-                  {isSubmitting ? 'Issuing Token...' : 'Issue Token & Enroll in Queue'}
+                  {isSubmitting ? t('patients.issuing') : t('patients.issue_token_btn')}
                 </button>
               </div>
             </form>

@@ -9,7 +9,7 @@ import { workloadRoutes } from './routes/workload.routes.js';
 import { streamRoutes } from './routes/stream.routes.js';
 import { auditRoutes } from './routes/audit.routes.js';
 import { demoRoutes } from './routes/demo.routes.js';
-import { prisma } from './db/client.js';
+import { translateRoutes } from './routes/translate.routes.js';
 
 export function buildServer() {
   const fastify = Fastify({
@@ -34,7 +34,7 @@ export function buildServer() {
     timeWindow: '1 minute',
   });
 
-  // Global Error Handler per Section 4.4: { error: { code, message } }
+  // Global Error Handler
   fastify.setErrorHandler((error: any, _request, reply) => {
     fastify.log.error(error);
     const statusCode = error.statusCode || 500;
@@ -62,6 +62,7 @@ export function buildServer() {
   fastify.register(streamRoutes);
   fastify.register(auditRoutes);
   fastify.register(demoRoutes);
+  fastify.register(translateRoutes);
 
   fastify.register(authRoutes, { prefix: '/api/v1' });
   fastify.register(queueRoutes, { prefix: '/api/v1' });
@@ -70,6 +71,7 @@ export function buildServer() {
   fastify.register(streamRoutes, { prefix: '/api/v1' });
   fastify.register(auditRoutes, { prefix: '/api/v1' });
   fastify.register(demoRoutes, { prefix: '/api/v1' });
+  fastify.register(translateRoutes, { prefix: '/api/v1' });
 
   return fastify;
 }

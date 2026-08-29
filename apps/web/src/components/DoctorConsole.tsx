@@ -1,16 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import {
   Activity,
-  UserX,
-  Clock,
   Stethoscope,
   CheckCircle2,
-  PhoneCall,
-  RefreshCw,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useNotifications } from '../context/NotificationContext';
-import { useQueue, DoctorMeta } from '../context/QueueContext';
+import { useQueue } from '../context/QueueContext';
+import { useLanguage } from '../context/LanguageContext';
 
 interface DoctorConsoleProps {
   lastEventTime?: number;
@@ -27,6 +24,7 @@ export const DoctorConsole: React.FC<DoctorConsoleProps> = () => {
     markNoShow,
     setDoctorAvailability,
   } = useQueue();
+  const { t, translateStatus, translatePriority, translateDepartment } = useLanguage();
 
   const [selectedDoctorId, setSelectedDoctorId] = useState<number>(user?.doctor_id || 1);
   const activeDoctor = doctors.find((d) => d.id === selectedDoctorId) || doctors[0];
@@ -54,7 +52,7 @@ export const DoctorConsole: React.FC<DoctorConsoleProps> = () => {
     return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
   };
 
-  // CALL BUTTON — Calls patient from waiting queue into consultation
+  // CALL BUTTON
   const handleCallPatient = (patientId: number) => {
     const target = queue.find((p) => p.id === patientId);
     if (!target) return;
@@ -68,7 +66,7 @@ export const DoctorConsole: React.FC<DoctorConsoleProps> = () => {
     );
   };
 
-  // COMPLETE & CALL NEXT BUTTON — Completes current and auto-advances next
+  // COMPLETE & CALL NEXT BUTTON
   const handleCompleteAndNext = () => {
     if (activePatient) {
       addNotification(
@@ -81,7 +79,7 @@ export const DoctorConsole: React.FC<DoctorConsoleProps> = () => {
     setElapsedSeconds(0);
   };
 
-  // NO-SHOW BUTTON — Marks patient as absent and advances remaining queue
+  // NO-SHOW BUTTON
   const handleNoShow = (patientId: number) => {
     const target = queue.find((p) => p.id === patientId);
     if (!target) return;
@@ -112,7 +110,7 @@ export const DoctorConsole: React.FC<DoctorConsoleProps> = () => {
               >
                 {doctors.map((d) => (
                   <option key={d.id} value={d.id} className="text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-900">
-                    {d.name} ({d.department})
+                    {d.name} ({translateDepartment(d.department)})
                   </option>
                 ))}
               </select>
@@ -121,7 +119,7 @@ export const DoctorConsole: React.FC<DoctorConsoleProps> = () => {
               </span>
             </div>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-              {activeDoctor.department} • Target Velocity: {activeDoctor.targetPace} min/patient
+              {translateDepartment(activeDoctor.department)} • {t('doctor.target_pace')}: {activeDoctor.targetPace} {t('common.min')}/{t('common.patient')}
             </p>
           </div>
         </div>
@@ -129,16 +127,16 @@ export const DoctorConsole: React.FC<DoctorConsoleProps> = () => {
         {/* Duty Status Selector */}
         <div className="flex items-center space-x-3">
           <div className="flex items-center space-x-2">
-            <span className="text-xs text-slate-400 font-medium">Duty Status:</span>
+            <span className="text-xs text-slate-400 font-medium">{t('doctor.duty_status')}</span>
             <select
               value={activeDoctor.availability}
               onChange={(e) => setDoctorAvailability(selectedDoctorId, e.target.value as any)}
               className="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500"
             >
-              <option value="AVAILABLE">● Available</option>
-              <option value="BUSY">● With Patient (Busy)</option>
-              <option value="ON_BREAK">● On Break</option>
-              <option value="OFFLINE">● Offline</option>
+              <option value="AVAILABLE">● {t('status.available')}</option>
+              <option value="BUSY">● {t('status.busy')}</option>
+              <option value="ON_BREAK">● {t('status.on_break')}</option>
+              <option value="OFFLINE">● {t('status.offline')}</option>
             </select>
           </div>
         </div>
@@ -149,7 +147,7 @@ export const DoctorConsole: React.FC<DoctorConsoleProps> = () => {
         <div className="clinical-card p-6 bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 space-y-5">
           <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
             <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-              IN CONSULTATION ROOM
+              {t('doctor.in_room')}
             </span>
             <span
               className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
@@ -158,7 +156,7 @@ export const DoctorConsole: React.FC<DoctorConsoleProps> = () => {
                   : 'bg-slate-100 dark:bg-slate-800 text-slate-400 border-slate-200'
               }`}
             >
-              {activePatient ? 'Live Session' : 'Room Empty'}
+              {activePatient ? t('doctor.live_session') : t('doctor.room_empty')}
             </span>
           </div>
 
@@ -178,7 +176,7 @@ export const DoctorConsole: React.FC<DoctorConsoleProps> = () => {
                         : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
                     }`}
                   >
-                    {activePatient.priority}
+                    {translatePriority(activePatient.priority)}
                   </span>
                 </div>
                 <h3 className="text-base font-bold text-slate-800 dark:text-slate-200 mt-1">
@@ -189,7 +187,7 @@ export const DoctorConsole: React.FC<DoctorConsoleProps> = () => {
               {/* Stopwatch Box */}
               <div className="p-4 rounded-2xl bg-slate-900 text-white text-center space-y-1">
                 <span className="text-[10px] font-mono text-teal-400 uppercase tracking-wider block">
-                  SESSION ELAPSED TIME
+                  {t('doctor.session_elapsed')}
                 </span>
                 <div className="text-4xl font-mono font-bold text-white tracking-widest">
                   {formatTimer(elapsedSeconds)}
@@ -203,7 +201,7 @@ export const DoctorConsole: React.FC<DoctorConsoleProps> = () => {
                       style={{ width: `${Math.min(100, (elapsedSeconds / (activeDoctor.targetPace * 60)) * 100)}%` }}
                     />
                   </div>
-                  <p className="text-[10px] text-slate-400 mt-1">Target Pace: {activeDoctor.targetPace}:00 min</p>
+                  <p className="text-[10px] text-slate-400 mt-1">{t('doctor.target_pace')}: {activeDoctor.targetPace}:00 {t('common.min')}</p>
                 </div>
               </div>
 
@@ -214,7 +212,7 @@ export const DoctorConsole: React.FC<DoctorConsoleProps> = () => {
                   className="w-full py-2.5 px-4 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-semibold text-xs shadow-sm transition-all flex items-center justify-center space-x-2"
                 >
                   <CheckCircle2 className="w-4 h-4" />
-                  <span>Complete & Call Next Patient</span>
+                  <span>{t('doctor.complete_next_btn')}</span>
                 </button>
               </div>
             </div>
@@ -222,10 +220,10 @@ export const DoctorConsole: React.FC<DoctorConsoleProps> = () => {
             <div className="py-10 text-center space-y-3">
               <CheckCircle2 className="w-8 h-8 text-slate-300 dark:text-slate-600 mx-auto" />
               <p className="font-bold text-sm text-slate-800 dark:text-slate-200">
-                No Active Patient in Room
+                {t('doctor.no_active')}
               </p>
               <p className="text-xs text-slate-400 max-w-xs mx-auto">
-                Click <b>Call</b> on any waiting patient in your queue below to begin consultation.
+                {t('doctor.no_active_sub')}
               </p>
             </div>
           )}
@@ -236,14 +234,14 @@ export const DoctorConsole: React.FC<DoctorConsoleProps> = () => {
           <div className="p-5 border-b border-slate-200/90 dark:border-slate-800 flex items-center justify-between">
             <div>
               <h3 className="font-display font-bold text-base text-slate-900 dark:text-white">
-                Upcoming Waiting Queue for {activeDoctor.name}
+                {t('doctor.upcoming_queue')} {activeDoctor.name}
               </h3>
               <p className="text-xs text-slate-400">
-                Ordered deterministically: Emergency → Urgent → Routine (by check-in time)
+                {t('doctor.ordered_by')}
               </p>
             </div>
             <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-teal-50 dark:bg-teal-950/60 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800">
-              {queue.length} Waiting
+              {queue.length} {t('doctor.waiting_count')}
             </span>
           </div>
 
@@ -251,12 +249,12 @@ export const DoctorConsole: React.FC<DoctorConsoleProps> = () => {
             <table className="w-full text-left text-xs">
               <thead>
                 <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                  <th className="py-3 px-4">POS</th>
-                  <th className="py-3 px-4">TOKEN</th>
-                  <th className="py-3 px-4">PATIENT NAME</th>
-                  <th className="py-3 px-4">PRIORITY</th>
-                  <th className="py-3 px-4">EST. WAIT</th>
-                  <th className="py-3 px-4 text-right">ACTIONS</th>
+                  <th className="py-3 px-4">{t('doctor.pos_col')}</th>
+                  <th className="py-3 px-4">{t('doctor.token_col')}</th>
+                  <th className="py-3 px-4">{t('doctor.name_col')}</th>
+                  <th className="py-3 px-4">{t('doctor.priority_col')}</th>
+                  <th className="py-3 px-4">{t('doctor.wait_col')}</th>
+                  <th className="py-3 px-4 text-right">{t('doctor.actions_col')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
@@ -276,22 +274,22 @@ export const DoctorConsole: React.FC<DoctorConsoleProps> = () => {
                               : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
                           }`}
                         >
-                          {p.priority}
+                          {translatePriority(p.priority)}
                         </span>
                       </td>
-                      <td className="py-3.5 px-4 text-slate-700 dark:text-slate-300 font-medium">{p.etaMinutes} min</td>
+                      <td className="py-3.5 px-4 text-slate-700 dark:text-slate-300 font-medium">{p.etaMinutes} {t('common.min')}</td>
                       <td className="py-3.5 px-4 text-right space-x-2">
                         <button
                           onClick={() => handleCallPatient(p.id)}
                           className="px-3 py-1 rounded-lg bg-teal-600 hover:bg-teal-500 text-white text-[11px] font-semibold transition-colors shadow-sm"
                         >
-                          Call
+                          {t('doctor.call_btn')}
                         </button>
                         <button
                           onClick={() => handleNoShow(p.id)}
                           className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-rose-600 text-[11px] font-semibold transition-colors"
                         >
-                          No-Show
+                          {t('doctor.noshow_btn')}
                         </button>
                       </td>
                     </tr>
@@ -299,7 +297,7 @@ export const DoctorConsole: React.FC<DoctorConsoleProps> = () => {
                 ) : (
                   <tr>
                     <td colSpan={6} className="py-8 text-center text-slate-400">
-                      No patients currently waiting for {activeDoctor.name}.
+                      {t('doctor.no_waiting')}
                     </td>
                   </tr>
                 )}
